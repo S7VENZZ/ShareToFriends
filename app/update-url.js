@@ -9,7 +9,7 @@
  */
 
 /** Where installed apps look for new versions unless the user sets another URL in the settings. */
-const DEFAULT_UPDATE_SOURCE = 'github:jpdoering02-stack/ShareToFriends';
+const DEFAULT_UPDATE_SOURCE = 'github:S7VENZZ/ShareToFriends';
 
 const LOOPBACK_HOSTS = new Set(['localhost', '127.0.0.1', '[::1]']);
 

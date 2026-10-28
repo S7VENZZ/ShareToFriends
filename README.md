@@ -122,7 +122,7 @@ Der Audio-Helfer `helper/StfAudioCapture.exe` wird mit `npm run build:helper` au
 
 ### Updates über GitHub
 
-Die App sucht standardmäßig unter `https://github.com/jpdoering02-stack/ShareToFriends/releases/latest` nach neuen Versionen und installiert sie im Hintergrund. Das Repository muss dafür **öffentlich** sein.
+Die App sucht standardmäßig unter `https://github.com/S7VENZZ/ShareToFriends/releases/latest` nach neuen Versionen und installiert sie im Hintergrund. Das Repository muss dafür **öffentlich** sein.
 
 Eine neue Version veröffentlichst du mit einem Befehl:
 
