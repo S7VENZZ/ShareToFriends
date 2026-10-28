@@ -1,0 +1,24 @@
+# TLS-Frontend für den Signaling-Dienst. Caddy holt das Zertifikat für {$DOMAIN} automatisch.
+{$DOMAIN} {
+	encode zstd gzip
+
+	handle /ws {
+		reverse_proxy 127.0.0.1:8787
+	}
+
+	handle /health {
+		reverse_proxy 127.0.0.1:8787
+	}
+
+	# App-Updates (electron-updater): latest.yml + Installer in ./updates ablegen
+	handle_path /updates/* {
+		root * /srv/updates
+		@meta path *.yml *.yaml
+		header @meta Cache-Control "no-cache"
+		file_server
+	}
+
+	handle {
+		respond "ShareToFriends signaling" 200
+	}
+}

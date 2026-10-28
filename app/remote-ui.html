@@ -1,0 +1,34 @@
+<!DOCTYPE html>
+<html lang="de">
+<head>
+  <meta charset="UTF-8" />
+  <meta http-equiv="Content-Security-Policy"
+        content="default-src 'none'; script-src 'self'; style-src 'self'; base-uri 'none'; form-action 'none'" />
+  <title>ShareToFriends – Remote Access</title>
+  <link rel="stylesheet" href="remote-ui.css" />
+</head>
+<body>
+  <!-- Consent prompt -->
+  <div id="prompt" class="prompt hidden">
+    <div class="prompt-title">Administrator-Bestätigung</div>
+    <p class="prompt-text">Zugriff für <strong id="promptName"></strong> erlauben?<br />Maus, Tastatur und Zwischenablage deines PCs wären dann für diese Person steuerbar. <strong>F12</strong> beendet den Zugriff jederzeit.</p>
+    <p class="prompt-timer">Wird in <span id="promptCountdown">30</span> s automatisch abgelehnt.</p>
+    <div class="prompt-actions">
+      <button id="btnDeny" class="btn btn-secondary" autofocus>Nein</button>
+      <button id="btnAllow" class="btn btn-primary">Ja</button>
+    </div>
+  </div>
+
+  <!-- Persistent indicator, always on top -->
+  <div id="banner" class="banner hidden">
+    <span class="banner-dot"></span>
+    <span class="banner-text">Remote Access aktiv – <strong id="bannerName"></strong></span>
+    <button id="btnEnd" class="btn btn-end">Zugriff sofort beenden</button>
+  </div>
+
+  <!-- Short notice (kill switch etc.) -->
+  <div id="notice" class="notice hidden"><span class="notice-icon">!</span><span id="noticeText"></span></div>
+
+  <script src="remote-ui.js"></script>
+</body>
+</html>

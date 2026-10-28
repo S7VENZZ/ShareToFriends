@@ -1,0 +1,92 @@
+{
+  "name": "sharetofriends",
+  "version": "2.0.1",
+  "description": "ShareToFriends – Bildschirm- und App-Audio teilen per ID und Passwort, direkt von PC zu PC (WebRTC)",
+  "main": "main.js",
+  "license": "MIT",
+  "author": "ShareToFriends contributors",
+  "scripts": {
+    "start": "electron .",
+    "dev": "electron . --dev",
+    "test": "node adaptive.test.js && node auth.test.js && node draw-style.test.js",
+    "build:helper": "helper\\build-helper.cmd",
+    "dist": "electron-builder --win nsis --publish never"
+  },
+  "dependencies": {
+    "electron-updater": "^6.8.0",
+    "koffi": "^3.3.4"
+  },
+  "devDependencies": {
+    "electron": "45.0.0",
+    "electron-builder": "26.18.0"
+  },
+  "build": {
+    "appId": "org.sharetofriends.app",
+    "productName": "ShareToFriends",
+    "artifactName": "ShareToFriends-Setup-${version}.${ext}",
+    "directories": {
+      "output": "dist"
+    },
+    "files": [
+      "main.js",
+      "preload.js",
+      "updater.js",
+      "update-url.js",
+      "key-hook.js",
+      "app-audio.js",
+      "pcm-worklet.js",
+      "remote-controller.js",
+      "remote-input.js",
+      "remote-ui.html",
+      "remote-ui.js",
+      "remote-ui.css",
+      "remote-ui-preload.js",
+      "draw-overlay.js",
+      "draw-overlay-preload.js",
+      "draw-overlay.html",
+      "draw-overlay.css",
+      "draw-overlay-page.js",
+      "draw-style.js",
+      "index.html",
+      "styles.css",
+      "adaptive.js",
+      "auth.js",
+      "signaling.js",
+      "p2p.js",
+      "mixer.js",
+      "renderer.js",
+      "build/icon.png",
+      "package.json"
+    ],
+    "asarUnpack": [
+      "node_modules/koffi/**"
+    ],
+    "extraResources": [
+      {
+        "from": "helper/StfAudioCapture.exe",
+        "to": "helper/StfAudioCapture.exe"
+      }
+    ],
+    "publish": [
+      {
+        "provider": "github",
+        "owner": "jpdoering02-stack",
+        "repo": "ShareToFriends"
+      }
+    ],
+    "win": {
+      "target": [
+        "nsis"
+      ],
+      "icon": "build/icon.png"
+    },
+    "nsis": {
+      "oneClick": false,
+      "perMachine": false,
+      "allowToChangeInstallationDirectory": true,
+      "createDesktopShortcut": true,
+      "createStartMenuShortcut": true,
+      "deleteAppDataOnUninstall": false
+    }
+  }
+}

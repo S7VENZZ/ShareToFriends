@@ -1,0 +1,10 @@
+node_modules/
+dist/
+*.log
+.env
+server/.env
+server/turnserver.conf
+server/updates/*
+!server/updates/.gitkeep
+app/helper/*.exe
+ShareToFriends-Server.zip

@@ -1,0 +1,31 @@
+* { box-sizing: border-box; }
+html, body { margin: 0; height: 100%; overflow: hidden; background: #1e1f22; color: #dbdee1;
+  font: 14px/1.4 "Segoe UI", system-ui, sans-serif; user-select: none; }
+.hidden { display: none !important; }
+
+.btn { border: 0; border-radius: 4px; padding: 9px 18px; font: inherit; font-weight: 600; color: #fff; cursor: pointer; }
+.btn-primary { background: #5865f2; }
+.btn-primary:hover { background: #4752c4; }
+.btn-secondary { background: #4e5058; }
+.btn-secondary:hover { background: #6d6f78; }
+
+.prompt { height: 100%; padding: 18px 20px; display: flex; flex-direction: column; gap: 8px;
+  border: 2px solid #f0b232; -webkit-app-region: drag; }
+.prompt-title { font-size: 17px; font-weight: 700; color: #f2f3f5; }
+.prompt-text { margin: 0; }
+.prompt-text strong { color: #f0b232; }
+.prompt-timer { margin: 0; font-size: 12px; color: #949ba4; }
+.prompt-actions { margin-top: auto; display: flex; justify-content: flex-end; gap: 10px; -webkit-app-region: no-drag; }
+
+.banner { height: 100%; display: flex; align-items: center; gap: 10px; padding: 0 8px 0 14px;
+  background: #da373c; color: #fff; -webkit-app-region: drag; }
+.banner-dot { width: 10px; height: 10px; border-radius: 50%; background: #fff; flex: none; animation: pulse 1.2s infinite; }
+.banner-text { flex: 1; min-width: 0; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; font-weight: 600; }
+.btn-end { background: #1e1f22; padding: 7px 12px; font-size: 12px; -webkit-app-region: no-drag; }
+.btn-end:hover { background: #000; }
+@keyframes pulse { 50% { opacity: 0.3; } }
+
+.notice { height: 100%; display: flex; align-items: center; gap: 12px; padding: 0 16px; background: #1e1f22;
+  border: 2px solid #f0b232; font-weight: 600; animation: notice-in 0.2s ease-out; }
+.notice-icon { width: 22px; height: 22px; border-radius: 50%; background: #f0b232; color: #1e1f22; display: grid; place-items: center; font-weight: 800; flex: none; }
+@keyframes notice-in { from { opacity: 0; transform: translateY(-6px); } }

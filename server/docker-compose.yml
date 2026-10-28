@@ -1,0 +1,52 @@
+# ShareToFriends – Server für einen kleinen VPS (1 vCPU / 1 GB RAM reichen).
+#
+#   ./setup.sh meinname.example.com      erzeugt Geheimnisse (.env), coturn-Konfiguration und startet alles
+#
+# Der VPS vermittelt nur den Verbindungsaufbau (Signaling) und dient als TURN-Fallback.
+# Zu Hause werden KEINE Ports geöffnet; die Streams laufen direkt von PC zu PC.
+
+services:
+  signaling:
+    build: .
+    container_name: stf-signaling
+    restart: unless-stopped
+    network_mode: host
+    environment:
+      - PORT=8787
+      - TURN_HOST=${DOMAIN:?./setup.sh <domain> ausführen}
+      - TURN_SECRET=${TURN_SECRET:?./setup.sh <domain> ausführen}
+    logging:
+      driver: json-file
+      options: { max-size: "10m", max-file: "3" }
+
+  coturn:
+    image: coturn/coturn:latest
+    container_name: stf-coturn
+    restart: unless-stopped
+    network_mode: host
+    command: ["-c", "/etc/coturn/turnserver.conf"]
+    volumes:
+      - ./turnserver.conf:/etc/coturn/turnserver.conf:ro
+    logging:
+      driver: json-file
+      options: { max-size: "10m", max-file: "3" }
+
+  caddy:
+    image: caddy:2
+    container_name: stf-caddy
+    restart: unless-stopped
+    network_mode: host
+    environment:
+      - DOMAIN=${DOMAIN}
+    volumes:
+      - ./Caddyfile:/etc/caddy/Caddyfile:ro
+      - ./updates:/srv/updates:ro
+      - caddy_data:/data
+      - caddy_config:/config
+    logging:
+      driver: json-file
+      options: { max-size: "10m", max-file: "3" }
+
+volumes:
+  caddy_data:
+  caddy_config:

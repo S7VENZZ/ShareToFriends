@@ -1,0 +1,10 @@
+{
+  "name": "sharetofriends-signaling",
+  "version": "2.0.0",
+  "private": true,
+  "description": "Signaling server for ShareToFriends (ID + password rendezvous, TURN credentials)",
+  "main": "signal-server.js",
+  "license": "MIT",
+  "scripts": { "start": "node signal-server.js", "test": "node test.js" },
+  "dependencies": { "ws": "^8.18.0" }
+}

@@ -1,0 +1,284 @@
+<!DOCTYPE html>
+<html lang="de">
+<head>
+  <meta charset="UTF-8" />
+  <meta http-equiv="Content-Security-Policy"
+        content="default-src 'none'; script-src 'self'; style-src 'self'; img-src 'self' data: blob:; media-src 'self' blob: mediastream:; connect-src 'self' ws: wss:; worker-src 'self' blob:; base-uri 'none'; form-action 'none'" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>ShareToFriends</title>
+  <link rel="stylesheet" href="styles.css" />
+</head>
+<body>
+
+  <svg class="sprite" width="0" height="0" aria-hidden="true">
+    <symbol id="i-copy" viewBox="0 0 24 24"><path d="M16 1H4c-1.1 0-2 .9-2 2v14h2V3h12V1zm3 4H8c-1.1 0-2 .9-2 2v14c0 1.1.9 2 2 2h11c1.1 0 2-.9 2-2V7c0-1.1-.9-2-2-2zm0 16H8V7h11v14z"/></symbol>
+    <symbol id="i-refresh" viewBox="0 0 24 24"><path d="M17.65 6.35C16.2 4.9 14.21 4 12 4c-4.42 0-7.99 3.58-7.99 8s3.57 8 7.99 8c3.73 0 6.84-2.55 7.73-6h-2.08c-.82 2.33-3.04 4-5.65 4-3.31 0-6-2.69-6-6s2.69-6 6-6c1.66 0 3.14.69 4.22 1.78L13 11h7V4l-2.35 2.35z"/></symbol>
+    <symbol id="i-settings" viewBox="0 0 24 24"><path d="M19.14 12.94c.04-.3.06-.61.06-.94 0-.32-.02-.64-.07-.94l2.03-1.58c.18-.14.23-.41.12-.61l-1.92-3.32c-.12-.22-.37-.29-.59-.22l-2.39.96c-.5-.38-1.03-.7-1.62-.94l-.36-2.54c-.04-.24-.24-.41-.48-.41h-3.84c-.24 0-.43.17-.47.41l-.36 2.54c-.59.24-1.13.57-1.62.94l-2.39-.96c-.22-.08-.47 0-.59.22L2.74 8.87c-.12.21-.08.47.12.61l2.03 1.58c-.05.3-.09.63-.09.94s.02.64.07.94l-2.03 1.58c-.18.14-.23.41-.12.61l1.92 3.32c.12.22.37.29.59.22l2.39-.96c.5.38 1.03.7 1.62.94l.36 2.54c.05.24.24.41.48.41h3.84c.24 0 .44-.17.47-.41l.36-2.54c.59-.24 1.13-.56 1.62-.94l2.39.96c.22.08.47 0 .59-.22l1.92-3.32c.12-.22.07-.47-.12-.61l-2.01-1.58zM12 15.6c-1.98 0-3.6-1.62-3.6-3.6s1.62-3.6 3.6-3.6 3.6 1.62 3.6 3.6-1.62 3.6-3.6 3.6z"/></symbol>
+    <symbol id="i-monitor" viewBox="0 0 24 24"><path d="M21 2H3c-1.1 0-2 .9-2 2v12c0 1.1.9 2 2 2h7v2H8v2h8v-2h-2v-2h7c1.1 0 2-.9 2-2V4c0-1.1-.9-2-2-2zm0 14H3V4h18v12z"/></symbol>
+    <symbol id="i-window" viewBox="0 0 24 24"><path d="M19 4H5c-1.11 0-2 .9-2 2v12c0 1.1.89 2 2 2h14c1.1 0 2-.9 2-2V6c0-1.1-.9-2-2-2zm0 14H5V8h14v10z"/></symbol>
+    <symbol id="i-vol" viewBox="0 0 24 24"><path d="M3 9v6h4l5 5V4L7 9H3zm13.5 3c0-1.77-1.02-3.29-2.5-4.03v8.05c1.48-.73 2.5-2.25 2.5-4.02zM14 3.23v2.06c2.89.86 5 3.54 5 6.71s-2.11 5.85-5 6.71v2.06c4.01-.91 7-4.49 7-8.77s-2.99-7.86-7-8.77z"/></symbol>
+    <symbol id="i-vol-off" viewBox="0 0 24 24"><path d="M16.5 12c0-1.77-1.02-3.29-2.5-4.03v2.21l2.45 2.45c.03-.2.05-.41.05-.63zm2.5 0c0 .94-.2 1.82-.54 2.64l1.51 1.51C20.63 14.91 21 13.5 21 12c0-4.28-2.99-7.86-7-8.77v2.06c2.89.86 5 3.54 5 6.71zM4.27 3L3 4.27 7.73 9H3v6h4l5 5v-6.73l4.25 4.25c-.67.52-1.42.93-2.25 1.18v2.06c1.38-.31 2.63-.95 3.69-1.81L19.73 21 21 19.73l-9-9L4.27 3zM12 4L9.91 6.09 12 8.18V4z"/></symbol>
+    <symbol id="i-fullscreen" viewBox="0 0 24 24"><path d="M7 14H5v5h5v-2H7v-3zm-2-4h2V7h3V5H5v5zm12 7h-3v2h5v-5h-2v3zM14 5v2h3v3h2V5h-5z"/></symbol>
+    <symbol id="i-pen" viewBox="0 0 24 24"><path d="M3 17.25V21h3.75L17.81 9.94l-3.75-3.75L3 17.25zM20.71 7.04c.39-.39.39-1.02 0-1.41l-2.34-2.34c-.39-.39-1.02-.39-1.41 0l-1.83 1.83 3.75 3.75 1.83-1.83z"/></symbol>
+    <symbol id="i-pin" viewBox="0 0 24 24"><path d="M16 9V4h1c.55 0 1-.45 1-1s-.45-1-1-1H7c-.55 0-1 .45-1 1s.45 1 1 1h1v5c0 1.66-1.34 3-3 3v2h5.97v7l1 1 1-1v-7H19v-2c-1.66 0-3-1.34-3-3z"/></symbol>
+    <symbol id="i-mouse" viewBox="0 0 24 24"><path d="M13 1.07V9h7c0-4.08-3.05-7.44-7-7.93zM4 15c0 4.42 3.58 8 8 8s8-3.58 8-8v-4H4v4zm7-13.93C7.05 1.56 4 4.92 4 9h7V1.07z"/></symbol>
+    <symbol id="i-felt" viewBox="0 0 24 24"><path d="M7 14c-1.66 0-3 1.34-3 3 0 1.31-1.16 2-2 2 .92 1.22 2.49 2 4 2 2.21 0 4-1.79 4-4 0-1.66-1.34-3-3-3zm13.71-9.37l-1.34-1.34a.996.996 0 0 0-1.41 0L9 12.25 11.75 15l8.96-8.96a.996.996 0 0 0 0-1.41z"/></symbol>
+    <symbol id="i-marker" viewBox="0 0 24 24"><path d="M6 14l3 3v5h6v-5l3-3V9H6v5zm5-12h2v3h-2V2zM3.5 5.88l1.41-1.42 2.12 2.13-1.41 1.41L3.5 5.88zm13.46.71l2.12-2.13 1.42 1.42-2.13 2.12-1.41-1.41z"/></symbol>
+    <symbol id="i-laser" viewBox="0 0 24 24"><path d="M12 8c-2.21 0-4 1.79-4 4s1.79 4 4 4 4-1.79 4-4-1.79-4-4-4zm8.94 3A8.994 8.994 0 0013 3.06V1h-2v2.06A8.994 8.994 0 003.06 11H1v2h2.06A8.994 8.994 0 0011 20.94V23h2v-2.06A8.994 8.994 0 0020.94 13H23v-2h-2.06zM12 19c-3.87 0-7-3.13-7-7s3.13-7 7-7 7 3.13 7 7-3.13 7-7 7z"/></symbol>
+    <symbol id="i-trash" viewBox="0 0 24 24"><path d="M6 19c0 1.1.9 2 2 2h8c1.1 0 2-.9 2-2V7H6v12zM19 4h-3.5l-1-1h-5l-1 1H5v2h14V4z"/></symbol>
+    <symbol id="i-chart" viewBox="0 0 24 24"><path d="M3 3v18h18v-2H5V3H3zm4 12h2v3H7v-3zm4-5h2v8h-2v-8zm4-3h2v11h-2V7z"/></symbol>
+    <symbol id="i-cursor" viewBox="0 0 24 24"><path d="M4 2l16 9-7 2-3 7L4 2z"/></symbol>
+    <symbol id="i-audio" viewBox="0 0 24 24"><path d="M3 9v6h4l5 5V4L7 9H3zm13 0v6c1.5-.7 2.5-1.8 2.5-3S17.5 9.7 16 9z"/></symbol>
+    <symbol id="i-swap" viewBox="0 0 24 24"><path d="M6.99 11L3 15l3.99 4v-3H14v-2H6.99v-3zM21 9l-3.99-4v3H10v2h7.01v3L21 9z"/></symbol>
+    <symbol id="i-stop" viewBox="0 0 24 24"><path d="M6 6h12v12H6z"/></symbol>
+    <symbol id="i-leave" viewBox="0 0 24 24"><path d="M10.09 15.59L11.5 17l5-5-5-5-1.41 1.41L12.67 11H3v2h9.67l-2.58 2.59zM19 3H5c-1.11 0-2 .9-2 2v4h2V5h14v14H5v-4H3v4c0 1.1.89 2 2 2h14c1.1 0 2-.9 2-2V5c0-1.1-.9-2-2-2z"/></symbol>
+  </svg>
+
+  <!-- Title bar -->
+  <header class="titlebar">
+    <div class="brand"><span class="brand-dot"></span><span class="brand-name">ShareToFriends</span></div>
+    <div class="titlebar-right">
+      <span id="updateMini" class="update-mini hidden"></span>
+      <span class="net-chip" id="netChip" title="Verbindung zum Vermittlungs-Server"><span id="netDot" class="net-dot off"></span><span id="netLabel">Server …</span></span>
+      <button id="btnSettings" class="icon-btn" title="Einstellungen" aria-label="Einstellungen"><svg class="icon"><use href="#i-settings"/></svg></button>
+    </div>
+  </header>
+
+  <!-- Update banner -->
+  <div id="updateBanner" class="update-banner" aria-live="polite">
+    <span class="update-banner-dot"></span>
+    <span id="updateBannerText">Update verfügbar</span>
+    <span class="spacer"></span>
+    <button id="btnUpdateLater" class="btn btn-ghost">Später</button>
+    <button id="btnUpdateNow" class="btn btn-primary">Jetzt neu starten</button>
+  </div>
+
+  <div class="app">
+    <!-- ================= Sidebar ================= -->
+    <aside class="side">
+      <section class="card id-card">
+        <h2>Deine ID</h2>
+        <div class="id-row">
+          <span id="myId" class="big-id">··· ··· ···</span>
+          <button id="btnCopyId" class="icon-btn" title="ID kopieren"><svg class="icon"><use href="#i-copy"/></svg></button>
+        </div>
+        <h2>Passwort</h2>
+        <div class="id-row">
+          <span id="myPw" class="big-pw">–</span>
+          <button id="btnCopyPw" class="icon-btn" title="Passwort kopieren"><svg class="icon"><use href="#i-copy"/></svg></button>
+          <button id="btnNewPw" class="icon-btn" title="Neues Passwort erzeugen"><svg class="icon"><use href="#i-refresh"/></svg></button>
+        </div>
+        <div id="hostChip" class="status-chip"><span class="chip-dot"></span><span id="hostChipText">Bereit</span></div>
+      </section>
+
+      <section class="card connect-card">
+        <h2>Mit Freund verbinden</h2>
+        <label>ID des Freundes
+          <input id="peerId" type="text" inputmode="numeric" placeholder="123 456 789" maxlength="11" spellcheck="false" autocomplete="off" />
+        </label>
+        <label>Passwort
+          <input id="peerPw" type="text" placeholder="XXXXX-XXXXX" maxlength="12" spellcheck="false" autocomplete="off" />
+        </label>
+        <button id="btnConnect" class="btn btn-primary wide" disabled>Verbinden</button>
+        <p id="connectError" class="form-error hidden"></p>
+      </section>
+
+      <section class="card people-card">
+        <div class="card-head"><h2>Zuschauer</h2><span id="viewerCount" class="chip">0</span></div>
+        <div id="viewerList" class="viewer-list"></div>
+        <p id="viewerListEmpty" class="hint">Wenn du deinen Bildschirm teilst, erscheinen hier deine Zuschauer.</p>
+      </section>
+
+      <footer class="userbar">
+        <span id="userAvatar" class="avatar">?</span>
+        <div class="user-meta"><strong id="userName">Unbenannt</strong><span id="userSub" class="hint">ID wird erzeugt …</span></div>
+      </footer>
+    </aside>
+
+    <!-- ================= Stage ================= -->
+    <main class="stage">
+      <!-- Idle -->
+      <section id="welcome" class="welcome">
+        <div class="welcome-icon"><svg class="icon xl"><use href="#i-monitor"/></svg></div>
+        <h1>Bildschirm und Spielton teilen</h1>
+        <p>Gib deinen Freunden deine <strong>ID</strong> und dein <strong>Passwort</strong> – oder verbinde dich links mit ihrer ID.
+          Der Stream läuft direkt von PC zu PC, an deinem Router muss nichts geöffnet werden.</p>
+        <div class="welcome-actions">
+          <button id="btnShare" class="btn btn-primary big">Bildschirm teilen</button>
+          <button id="btnFocusConnect" class="btn btn-secondary big">Mit Freund verbinden</button>
+        </div>
+      </section>
+
+      <!-- Host view -->
+      <section id="hostView" class="view hidden">
+        <div class="video-wrap"><video id="previewVideo" muted autoplay playsinline></video></div>
+        <div id="shareBar" class="float-bar top">
+          <span class="live-dot"></span>
+          <span id="shareLabel" class="bar-label">Du teilst</span>
+          <button id="btnSwitch" class="bar-btn" title="Quelle sofort wechseln"><svg class="icon"><use href="#i-swap"/></svg><span>Quelle</span></button>
+          <button id="btnAudio" class="bar-btn" title="Audio-Mischpult"><svg class="icon"><use href="#i-audio"/></svg><span>Audio</span></button>
+          <button id="btnClearAll" class="bar-btn" title="Alle Zeichnungen vom Desktop entfernen"><svg class="icon"><use href="#i-trash"/></svg><span>Desktop leeren</span></button>
+          <label class="bar-check" title="Zuschauer dürfen Laserpointer und Zeichnungen auf deinem Bildschirm zeigen"><input id="chkAllowDraw" type="checkbox" checked /> Zeichnen erlauben</label>
+          <button id="btnStopShare" class="bar-btn danger"><svg class="icon"><use href="#i-stop"/></svg><span>Beenden</span></button>
+        </div>
+        <div id="hostRemoteBanner" class="remote-banner hidden" role="alert">
+          <span class="banner-dot"></span>
+          <span class="banner-label">Remote Access aktiv – <strong id="hostRemoteName"></strong> steuert deinen PC · <kbd>F12</kbd> beendet sofort</span>
+          <button id="btnHostRemoteEnd" class="btn btn-danger">Zugriff sofort beenden</button>
+        </div>
+        <div id="hostStats" class="stats-overlay hidden"></div>
+      </section>
+
+      <!-- Viewer view -->
+      <section id="viewerView" class="view hidden">
+        <div id="viewerWrap" class="video-wrap viewer-wrap">
+          <video id="remoteVideo" autoplay playsinline></video>
+          <canvas id="drawCanvas" class="draw-canvas"></canvas>
+          <div id="viewerBusy" class="viewer-busy"><div class="spinner"></div><span id="viewerBusyText">Verbinde …</span></div>
+          <div id="viewStats" class="stats-overlay hidden"></div>
+          <div id="controlOverlay" class="control-overlay hidden">Fernsteuerung aktiv – <kbd>Strg</kbd>+<kbd>Alt</kbd>+<kbd>Shift</kbd>+<kbd>R</kbd> gibt Maus &amp; Tastatur frei</div>
+          <div id="viewHint" class="view-hint hidden"></div>
+
+          <!-- Drawing options: tool, any colour, size -->
+          <div id="drawPanel" class="draw-panel hidden" role="group" aria-label="Zeichen-Optionen">
+            <div id="toolRow" class="panel-row">
+              <button type="button" class="tool-btn" data-tool="pencil" title="Bleistift – dünn und präzise"><svg class="icon"><use href="#i-pen"/></svg>Bleistift</button>
+              <button type="button" class="tool-btn" data-tool="felt" title="Filzstift – kräftig und deckend"><svg class="icon"><use href="#i-felt"/></svg>Filzstift</button>
+              <button type="button" class="tool-btn" data-tool="marker" title="Textmarker – breit und durchscheinend"><svg class="icon"><use href="#i-marker"/></svg>Marker</button>
+            </div>
+            <div class="panel-row">
+              <span class="panel-label">Farbe</span>
+              <div id="swatches" class="swatches"></div>
+              <input id="colorCustom" class="color-custom" type="color" value="#f23f43" aria-label="Beliebige Farbe wählen" title="Beliebige Farbe wählen" />
+            </div>
+            <div class="panel-row">
+              <span id="sizeLabel" class="panel-label">Dicke</span>
+              <input id="sizeRange" class="slider" type="range" min="1" max="48" step="1" value="8" aria-label="Größe" />
+              <canvas id="sizePreview" class="size-preview" width="120" height="40"></canvas>
+            </div>
+          </div>
+
+          <!-- Discord-style floating stream bar -->
+          <div id="streamBar" class="float-bar bottom">
+            <button id="btnMute" class="bar-icon" title="Ton an/aus (nur bei dir)" aria-pressed="false"><svg class="icon"><use href="#i-vol"/></svg></button>
+            <input id="viewVolume" class="slider volume" type="range" min="0" max="100" value="100" aria-label="Lautstärke – wirkt nur bei dir" title="Lautstärke – wirkt nur bei dir" />
+            <span class="bar-sep"></span>
+            <div class="seg-mini" id="zoomSeg" role="group" aria-label="Zoom">
+              <button id="zoomFit" class="seg-mini-btn active" title="Bild einpassen">Anpassen</button>
+              <button id="zoomFill" class="seg-mini-btn" title="Fläche füllen (Rand wird abgeschnitten)">Füllen</button>
+              <button id="zoom100" class="seg-mini-btn" title="Originalgröße (100 %), mit Mausrad scrollen">100 %</button>
+            </div>
+            <select id="selQuality" class="bar-select" aria-label="Qualität" title="Maximale Qualität für dich">
+              <option value="0">Auto (beste)</option>
+              <option value="1">720p 60</option>
+              <option value="2">720p 30</option>
+              <option value="3">540p 30</option>
+              <option value="4">360p 30</option>
+            </select>
+            <span class="bar-sep"></span>
+            <button id="btnCursor" class="bar-icon" title="Mauszeiger (M)" aria-pressed="false"><svg class="icon"><use href="#i-mouse"/></svg></button>
+            <button id="btnPenTemp" class="bar-icon" title="Zeichnen – verblasst nach Sekunden (P)" aria-pressed="false"><svg class="icon"><use href="#i-pen"/></svg></button>
+            <button id="btnPenPerm" class="bar-icon" title="Zeichnen – bleibt bis zum Löschen (O)" aria-pressed="false"><svg class="icon"><use href="#i-pin"/></svg></button>
+            <button id="btnClearMine" class="bar-icon" title="Meine Zeichnungen löschen (C)"><svg class="icon"><use href="#i-trash"/></svg></button>
+            <span class="bar-sep"></span>
+            <button id="btnControl" class="bar-btn" title="Den PC des Freundes steuern (er muss zustimmen)" disabled><svg class="icon"><use href="#i-cursor"/></svg><span>Steuern</span></button>
+            <button id="btnStats" class="bar-icon" title="Verbindungs-Statistik" aria-pressed="false"><svg class="icon"><use href="#i-chart"/></svg></button>
+            <button id="btnFullscreen" class="bar-icon" title="Vollbild (F oder F11 · Esc beendet) – oder Doppelklick aufs Bild"><svg class="icon"><use href="#i-fullscreen"/></svg></button>
+            <button id="btnLeave" class="bar-btn danger" title="Verbindung beenden"><svg class="icon"><use href="#i-leave"/></svg><span>Verlassen</span></button>
+          </div>
+        </div>
+        <div id="controlBar" class="remote-bar hidden">
+          <span id="controlStatus" class="remote-status"></span>
+          <span class="spacer"></span>
+          <button id="btnEngage" class="btn btn-secondary hidden">Steuerung übernehmen</button>
+          <button id="btnReleaseControl" class="btn btn-danger hidden">Zugriff beenden</button>
+        </div>
+      </section>
+    </main>
+  </div>
+
+  <!-- ================= Source picker ("Go Live") ================= -->
+  <dialog id="pickerDialog" class="dialog wide-dialog">
+    <div class="dialog-body">
+      <div class="card-head">
+        <h2 id="pickerTitle" class="dialog-title">Was möchtest du teilen?</h2>
+        <button id="btnIdentify" class="btn btn-ghost small" title="Zeigt kurz die Monitor-Nummern auf den Bildschirmen">Monitore zeigen</button>
+      </div>
+      <div class="seg" id="pickerTabs" data-active="0" role="tablist">
+        <span class="seg-pill" aria-hidden="true"></span>
+        <button id="tabScreens" class="seg-btn active" role="tab"><svg class="icon"><use href="#i-monitor"/></svg>Monitore</button>
+        <button id="tabWindows" class="seg-btn" role="tab"><svg class="icon"><use href="#i-window"/></svg>Fenster &amp; Spiele</button>
+      </div>
+      <input id="pickerSearch" class="search hidden" type="text" placeholder="Fenster suchen …" spellcheck="false" autocomplete="off" />
+      <div id="pickerGrid" class="source-grid" role="listbox" aria-label="Verfügbare Quellen"></div>
+      <div class="dialog-actions">
+        <span id="pickerAudioNote" class="hint"></span>
+        <span class="spacer"></span>
+        <button id="btnPickerAudio" class="btn btn-ghost">Audio …</button>
+        <button id="btnPickerCancel" class="btn btn-secondary">Abbrechen</button>
+        <button id="btnPickerStart" class="btn btn-primary" disabled>Teilen</button>
+      </div>
+    </div>
+  </dialog>
+
+  <!-- ================= Audio mixer ================= -->
+  <dialog id="audioDialog" class="dialog">
+    <div class="dialog-body">
+      <h2 class="dialog-title">Audio-Mischpult</h2>
+      <p class="hint">Es wird nur Ton von Programmen übertragen – kein Mikrofon. Wähle, was deine Freunde hören sollen.</p>
+      <div class="radio-list" role="radiogroup">
+        <label class="radio"><input type="radio" name="audioMode" value="exclude" /> <span><strong>Alles außer angehakten Apps</strong><small>z. B. TeamSpeak und Discord bleiben stumm</small></span></label>
+        <label class="radio"><input type="radio" name="audioMode" value="include" /> <span><strong>Nur angehakte Apps</strong><small>z. B. nur Spiel + Spotify</small></span></label>
+        <label class="radio"><input type="radio" name="audioMode" value="all" /> <span><strong>Gesamter Systemton</strong><small>alles, was dein PC abspielt</small></span></label>
+      </div>
+      <div id="appList" class="app-list" role="group" aria-label="Anwendungen mit Audio"></div>
+      <div class="meter-row"><span>Gesamtmix</span><div class="meter"><div id="masterMeter" class="meter-fill"></div></div></div>
+      <p id="appNote" class="hint"></p>
+      <div class="dialog-actions"><span class="spacer"></span><button id="btnAudioClose" class="btn btn-primary">Fertig</button></div>
+    </div>
+  </dialog>
+
+  <!-- ================= Settings ================= -->
+  <dialog id="settingsDialog" class="dialog">
+    <form method="dialog" id="settingsForm" class="dialog-body" autocomplete="off">
+      <h2 class="dialog-title">Einstellungen</h2>
+      <label>Dein Anzeigename
+        <input id="setName" type="text" maxlength="32" placeholder="z. B. Alex" />
+      </label>
+      <label>Vermittlungs-Server (Signaling)
+        <input id="setServer" type="text" placeholder="wss://stf.meinedomain.de/ws" spellcheck="false" />
+        <small class="field-state">Der kleine Server auf deinem VPS. Er vermittelt nur den Verbindungsaufbau – der Stream läuft direkt zwischen den PCs.</small>
+      </label>
+      <fieldset class="update-box">
+        <legend>Updates</legend>
+        <label>Update-URL (https)
+          <input id="setUpdateUrl" type="text" placeholder="leer = https://&lt;Server&gt;/updates  ·  github:besitzer/repo" spellcheck="false" />
+          <small id="setUpdateDerived" class="field-state"></small>
+        </label>
+        <label class="inline-check"><input id="setAutoUpdate" type="checkbox" checked /> Automatisch im Hintergrund nach Updates suchen</label>
+        <div class="update-row">
+          <span id="updateStatusText" class="hint"></span>
+          <button type="button" id="btnCheckUpdate" class="btn btn-secondary">Jetzt prüfen</button>
+        </div>
+      </fieldset>
+      <p id="settingsError" class="form-error hidden"></p>
+      <div class="dialog-actions">
+        <span id="appVersion" class="hint"></span>
+        <span class="spacer"></span>
+        <button type="button" id="btnCloseSettings" class="btn btn-secondary">Abbrechen</button>
+        <button type="submit" class="btn btn-primary">Speichern</button>
+      </div>
+    </form>
+  </dialog>
+
+  <div id="toasts" class="toasts" aria-live="polite"></div>
+
+  <script src="adaptive.js"></script>
+  <script src="auth.js"></script>
+  <script src="signaling.js"></script>
+  <script src="p2p.js"></script>
+  <script src="mixer.js"></script>
+  <script src="draw-style.js"></script>
+  <script src="renderer.js"></script>
+</body>
+</html>
