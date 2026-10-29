@@ -1,6 +1,6 @@
 {
   "name": "sharetofriends",
-  "version": "2.0.4",
+  "version": "2.0.5",
   "description": "ShareToFriends – Bildschirm- und App-Audio teilen per ID und Passwort, direkt von PC zu PC (WebRTC)",
   "main": "main.js",
   "license": "MIT",
