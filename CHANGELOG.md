@@ -1,5 +1,15 @@
 # Changelog
 
+## 2.0.2
+
+- **Passwort bleibt gespeichert:** ID und Passwort überleben Neustarts (Passwort verschlüsselt mit dem Windows-Konto). Es ändert sich nur per **↻** (neues zufälliges) oder **✎** (eigenes, dauerhaftes Passwort, 10–64 Zeichen). Nach 5 Fehlversuchen werden neue Anmeldungen 10 Minuten gesperrt, statt das Passwort zu ändern.
+- **Zuletzt verbunden:** Freunde werden mit Name, ID und Passwort gespeichert (verschlüsselt, abschaltbar), ein Klick verbindet. Ändert sich das Passwort, fragt die App nach dem neuen.
+- **Mauszeiger:** immer der normale weiße Windows-Pfeil in Standardgröße, ohne Farb- und Größen-Optionen.
+- **Zeichnen:** Bleistift, Filzstift oder Marker, beliebige Farbe und Dicke – für „verblasst“ und „bleibt“.
+- **Bilder:** per Knopf, Strg+V oder Drag & Drop auf den Bildschirm des Streamers legen; verschieben, skalieren, drehen und mit Alt + ziehen zuschneiden.
+- **Qualität für den Streamer:** Auto (optional mit Obergrenze) oder feste Stufe (1080p60 / 720p60 / 720p30).
+- Intern: verschlüsselter Speicher nutzt die neue asynchrone `safeStorage`-API von Electron 45.
+
 ## 2.0.1
 
 - **Stream-Leiste:** bricht in normalen Fenstern nicht mehr um (einzeilig bis etwa 700 px Breite, in schmalen Fenstern nur Symbole).

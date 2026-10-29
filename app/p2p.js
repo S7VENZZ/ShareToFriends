@@ -241,7 +241,7 @@
       let sendBps = 0;
       if (this.lastBytes) sendBps = ((out.bytesSent - this.lastBytes.bytes) * 8 * 1000) / Math.max(1, out.timestamp - this.lastBytes.ts);
       const decision = this.controller.update(
-        { availableBps: pair ? pair.availableOutgoingBitrate : undefined, sendBps, rttMs, qualityLimit: out.qualityLimitationReason, maxTierIndex: this.viewerMaxTier },
+        { availableBps: pair ? pair.availableOutgoingBitrate : undefined, sendBps, rttMs, qualityLimit: out.qualityLimitationReason, maxTierIndex: Math.max(this.viewerMaxTier || 0, this.hostMaxTier || 0), forceTierIndex: Number.isInteger(this.hostForceTier) ? this.hostForceTier : undefined },
         now
       );
 

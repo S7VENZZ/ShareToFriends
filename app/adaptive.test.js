@@ -76,6 +76,20 @@ run('viewer asks for lower quality: the host never exceeds it', () => {
   assert(r.tierIndex >= 2);
 });
 
+run('streamer pins a tier: it stays put even when the ping guard would cut', () => {
+  const c = createController();
+  let last;
+  for (let s = 0; s < 40; s++) last = c.update({ availableBps: 1e6, rttMs: s < 5 ? 10 : 200, forceTierIndex: 0 }, s * 1000);
+  assert.strictEqual(last.tier.name, '1080p60');
+  assert.strictEqual(last.reason, 'fixed');
+});
+
+run('pinned tier still respects the lower limit a viewer asks for', () => {
+  const c = createController();
+  const r = c.update({ availableBps: 30e6, rttMs: 18, forceTierIndex: 0, maxTierIndex: 3 }, 1000);
+  assert.strictEqual(r.tier.name, '540p30');
+});
+
 run('scaleFor maps capture height to the tier', () => {
   assert.strictEqual(scaleFor(1080, TIERS[1]), 1.5);
   assert.strictEqual(scaleFor(720, TIERS[1]), 1);

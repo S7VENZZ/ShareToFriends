@@ -33,7 +33,10 @@
     prefs: {},
     info: null,
     myId: '',
-    password: '', // canonical 10 characters, new on every start
+    password: '', // canonical form (see auth.js); kept until the streamer renews it
+    passwordCustom: false, // true = chosen by the streamer himself
+    persist: false, // OS encryption available -> password and friends survive a restart
+    friends: [], // [{ id, name, pw, last }] saved connections (viewer side)
     ice: [],
     sig: null,
   };
@@ -75,7 +78,8 @@
 
   function renderIdentity() {
     $('myId').textContent = A.formatId(state.myId);
-    $('myPw').textContent = state.password ? `${state.password.slice(0, 5)}-${state.password.slice(5)}` : '–';
+    $('myPw').textContent = !state.password ? '–' : state.passwordCustom ? state.password : `${state.password.slice(0, 5)}-${state.password.slice(5)}`;
+    $('pwHint').textContent = state.persist ? (state.passwordCustom ? 'Dein eigenes Passwort – bleibt gespeichert.' : 'Bleibt gespeichert, bis du ein neues erzeugst (↻) oder eigenes festlegst (✎).') : 'Wird bei jedem Start neu erzeugt.';
     const name = state.settings.displayName || 'Unbenannt';
     $('userName').textContent = name;
     $('userAvatar').textContent = name.slice(0, 1).toUpperCase();
@@ -126,29 +130,190 @@
     toast(`${what} kopiert.`, 'ok', 2000);
   }
 
-  function newPassword(reason) {
-    state.password = A.normalizePassword(A.generatePassword());
-    host.baseKey = A.deriveKey(state.password, state.myId);
+  /** The host password stays until the streamer renews it (↻) or sets his own (✎): friends can save it. */
+  function setHostPassword(pw, custom) {
+    state.password = pw;
+    state.passwordCustom = custom;
+    host.baseKey = A.deriveKey(pw, state.myId);
     host.failures = [];
+    host.lockUntil = 0;
+    setPref('pwCustom', custom);
     renderIdentity();
+    if (state.persist) stf.secretSet('hostPassword', pw).catch(() => {});
+  }
+
+  function newPassword(reason) {
+    setHostPassword(A.normalizePassword(A.generatePassword()), false);
     if (reason) toast(reason, '', 6000);
+  }
+
+  async function initHostPassword() {
+    try {
+      state.persist = await stf.secretAvailable();
+    } catch {
+      state.persist = false;
+    }
+    const saved = state.persist ? await stf.secretGet('hostPassword').catch(() => null) : null;
+    const pw = saved ? A.normalizePassword(saved) : '';
+    if (pw) setHostPassword(pw, state.prefs.pwCustom === true);
+    else newPassword();
+  }
+
+  function openPasswordDialog() {
+    $('pwInput').value = '';
+    checkPasswordInput();
+    $('pwDialog').showModal();
+    $('pwInput').focus();
+  }
+
+  function checkPasswordInput() {
+    const text = $('pwInput').value;
+    const problem = text ? A.customPasswordProblem(text) : '';
+    $('pwProblem').textContent = problem || (text ? 'Passt.' : 'Mindestens 10 Zeichen.');
+    $('pwProblem').classList.toggle('bad', Boolean(problem));
+    $('btnPwSave').disabled = !text || Boolean(problem);
+  }
+
+  function bindPasswordDialog() {
+    $('btnEditPw').addEventListener('click', openPasswordDialog);
+    $('pwInput').addEventListener('input', checkPasswordInput);
+    $('btnPwCancel').addEventListener('click', () => $('pwDialog').close());
+    $('btnPwRandom').addEventListener('click', () => {
+      $('pwInput').value = A.generatePassword();
+      checkPasswordInput();
+    });
+    $('pwForm').addEventListener('submit', () => {
+      const pw = A.normalizePassword($('pwInput').value);
+      if (!pw || A.customPasswordProblem($('pwInput').value)) return;
+      // a typed generated-style password is simply a generated password
+      setHostPassword(pw, !/^[A-HJ-NP-Z2-9]{10}$/.test(pw));
+      toast('Dein Passwort wurde festgelegt. Freunde können es speichern und sich damit jedes Mal anmelden.', 'ok', 5000);
+    });
+  }
+
+  /* ---- saved friends (viewer side) ---- */
+
+  function timeAgo(ts) {
+    const s = Math.max(0, (Date.now() - ts) / 1000);
+    if (s < 60) return 'gerade eben';
+    const m = Math.floor(s / 60);
+    if (m < 60) return `vor ${m} Min.`;
+    const h = Math.floor(m / 60);
+    if (h < 24) return `vor ${h} Std.`;
+    const d = Math.floor(h / 24);
+    return d === 1 ? 'gestern' : `vor ${d} Tagen`;
+  }
+
+  async function loadFriends() {
+    if (!state.persist) return;
+    try {
+      const list = JSON.parse((await stf.secretGet('friends')) || '[]');
+      state.friends = (Array.isArray(list) ? list : [])
+        .filter((f) => f && A.normalizeId(f.id) && A.normalizePassword(f.pw))
+        .map((f) => ({ id: A.normalizeId(f.id), name: String(f.name || '').slice(0, 32), pw: A.normalizePassword(f.pw), last: Number(f.last) || 0 }))
+        .sort((a, b) => b.last - a.last)
+        .slice(0, 20);
+    } catch {
+      state.friends = [];
+    }
+  }
+
+  function saveFriends() {
+    state.friends.sort((a, b) => b.last - a.last);
+    state.friends = state.friends.slice(0, 20);
+    if (state.persist) stf.secretSet('friends', JSON.stringify(state.friends)).catch(() => {});
+    renderFriends();
+  }
+
+  /** Called after a successful connection (and again when the friend's name arrives). */
+  function rememberFriend(hostId, password, name) {
+    if (!state.persist || !hostId || !password) return;
+    const existing = state.friends.find((f) => f.id === hostId);
+    if (!existing && !$('chkRemember').checked) return;
+    if (existing) {
+      existing.pw = password;
+      existing.last = Date.now();
+      if (name) existing.name = name.slice(0, 32);
+    } else {
+      state.friends.push({ id: hostId, name: (name || '').slice(0, 32), pw: password, last: Date.now() });
+    }
+    saveFriends();
+  }
+
+  function renderFriends() {
+    const card = $('friendsCard');
+    const list = $('friendsList');
+    list.replaceChildren();
+    card.classList.toggle('hidden', !state.persist || state.friends.length === 0);
+    const locked = Boolean(viewer.peer || viewer.connecting);
+    for (const f of state.friends) {
+      const row = document.createElement('div');
+      row.className = 'friend-row';
+      row.setAttribute('role', 'button');
+      row.tabIndex = 0;
+      row.title = locked ? 'Du bist gerade verbunden' : `Mit ${f.name || A.formatId(f.id)} verbinden`;
+      const av = document.createElement('span');
+      av.className = 'avatar';
+      av.textContent = (f.name || '#').slice(0, 1).toUpperCase();
+      av.style.background = `hsl(${hueFor(f.id)} 55% 45%)`;
+      const meta = document.createElement('span');
+      meta.style.minWidth = '0';
+      const nm = document.createElement('div');
+      nm.className = 'name';
+      nm.textContent = f.name || A.formatId(f.id);
+      const sub = document.createElement('div');
+      sub.className = 'sub';
+      sub.textContent = `${A.formatId(f.id)} · ${timeAgo(f.last)}`;
+      meta.append(nm, sub);
+      const rm = document.createElement('button');
+      rm.type = 'button';
+      rm.className = 'friend-remove';
+      rm.textContent = '×';
+      rm.title = 'Aus der Liste entfernen';
+      rm.setAttribute('aria-label', `${f.name || A.formatId(f.id)} entfernen`);
+      rm.addEventListener('click', (e) => {
+        e.stopPropagation();
+        state.friends = state.friends.filter((x) => x.id !== f.id);
+        saveFriends();
+      });
+      const go = () => !locked && connectSaved(f);
+      row.addEventListener('click', go);
+      row.addEventListener('keydown', (e) => {
+        if (e.key === 'Enter' || e.key === ' ') {
+          e.preventDefault();
+          go();
+        }
+      });
+      row.append(av, meta, rm);
+      list.appendChild(row);
+    }
+  }
+
+  async function connectSaved(f) {
+    if (viewer.peer || viewer.connecting || !state.sig || !state.sig.ready) {
+      toast('Du bist noch nicht mit dem Server verbunden.', 'error', 3000);
+      return;
+    }
+    $('connectError').classList.add('hidden');
+    viewer.creds = { hostId: f.id, password: f.pw };
+    viewer.fromSaved = true;
+    viewer.leaving = false;
+    await openViewerSession(false);
   }
 
   function bindSidebar() {
     $('btnCopyId').addEventListener('click', () => copyText(state.myId, 'ID'));
     $('btnCopyPw').addEventListener('click', () => copyText($('myPw').textContent, 'Passwort'));
-    $('btnNewPw').addEventListener('click', () => newPassword('Neues Passwort erzeugt. Bestehende Verbindungen bleiben bestehen.'));
+    $('btnNewPw').addEventListener('click', () => newPassword('Neues zufälliges Passwort erzeugt. Gespeicherte Passwörter deiner Freunde passen nicht mehr. Bestehende Verbindungen bleiben bestehen.'));
+    bindPasswordDialog();
     $('btnFocusConnect').addEventListener('click', () => $('peerId').focus());
     $('peerId').addEventListener('input', (e) => {
       const digits = e.target.value.replace(/\D/g, '').slice(0, 9);
       e.target.value = digits.replace(/(\d{3})(?=\d)/g, '$1 ');
       updateConnectButton();
     });
-    $('peerPw').addEventListener('input', (e) => {
-      const s = e.target.value.toUpperCase().replace(/[^A-Z0-9]/g, '').slice(0, 10);
-      e.target.value = s.length > 5 ? `${s.slice(0, 5)}-${s.slice(5)}` : s;
-      updateConnectButton();
-    });
+    $('peerPw').addEventListener('input', updateConnectButton);
+    $('chkRemember').addEventListener('change', () => setPref('rememberPw', $('chkRemember').checked));
     for (const id of ['peerId', 'peerPw']) {
       $(id).addEventListener('keydown', (e) => {
         if (e.key === 'Enter' && !$('btnConnect').disabled) connectToFriend();
@@ -544,6 +709,9 @@
     allowDraw: true,
     control: null, // { sid, name, clip }
     denyUntil: new Map(),
+    maxTier: 0, // quality ceiling chosen by the streamer (0 = automatic, as high as the line allows)
+    forceTier: null, // or one pinned tier
+    lockUntil: 0, // after too many wrong passwords new logins are blocked until then
   };
 
   async function captureSource(id) {
@@ -656,6 +824,11 @@
       state.sig.bye(sid);
       return;
     }
+    if (Date.now() < host.lockUntil) {
+      state.sig.relay(sid, { k: 'refuse', reason: 'rate-limit' });
+      state.sig.bye(sid);
+      return;
+    }
     const peer = new HostPeer({
       sig: state.sig,
       sid,
@@ -689,6 +862,8 @@
         },
       },
     });
+    peer.hostMaxTier = host.maxTier;
+    peer.hostForceTier = host.forceTier;
     host.peers.set(sid, peer); // routing needs it during the handshake; removed again if auth fails
     peer.start();
     // a handshake that never completes frees its slot
@@ -699,8 +874,12 @@
     const now = Date.now();
     host.failures = host.failures.filter((t) => now - t < 10 * 60_000);
     host.failures.push(now);
-    if (host.failures.length >= 5) newPassword('Zu viele falsche Passwörter – dein Passwort wurde automatisch erneuert.');
-    else toast('Jemand hat ein falsches Passwort eingegeben.', 'error', 4000);
+    if (host.failures.length >= 5) {
+      // the password stays (friends have saved it): block new logins for a while instead
+      host.lockUntil = now + 10 * 60_000;
+      host.failures = [];
+      toast('Zu viele falsche Passwörter – neue Anmeldungen sind 10 Minuten gesperrt. Dein Passwort bleibt unverändert.', 'error', 8000);
+    } else toast('Jemand hat ein falsches Passwort eingegeben.', 'error', 4000);
   }
 
   function renderViewerList() {
@@ -732,6 +911,27 @@
       kick.addEventListener('click', () => p.close('kicked'));
       row.append(av, meta, kick);
       list.appendChild(row);
+    }
+  }
+
+  /** Streamer quality: "0".."4" = automatic with a ceiling, "f0".."f2" = pinned tier (no ping guard). */
+  function applyHostQuality(value, announce) {
+    const pinned = typeof value === 'string' && value.startsWith('f');
+    const idx = clamp(Math.round(Number(pinned ? value.slice(1) : value) || 0), 0, AD.TIERS.length - 1);
+    host.maxTier = pinned ? 0 : idx;
+    host.forceTier = pinned ? idx : null;
+    setPref('hostQuality', pinned ? `f${idx}` : String(idx));
+    $('selHostQuality').value = pinned ? `f${idx}` : String(idx);
+    for (const p of host.peers.values()) {
+      p.hostMaxTier = host.maxTier;
+      p.hostForceTier = host.forceTier;
+    }
+    if (announce) {
+      toast(
+        pinned ? `Feste Qualität: ${AD.TIERS[idx].name} – ohne Ping-Schutz` : idx ? `Maximale Qualität: ${AD.TIERS[idx].name}` : 'Qualität: automatisch (so hoch wie deine Leitung erlaubt)',
+        'ok',
+        3500
+      );
     }
   }
 
@@ -771,6 +971,10 @@
       case 'clip-chunk':
         if (host.control && host.control.sid === peer.sid && host.control.clip) host.control.clip.handle(msg);
         break;
+      case 'img-start':
+      case 'img-chunk':
+        hostPictureChunk(peer, msg);
+        break;
       default:
         // kd / ku / md / mu / wh / rel / mm: input; the main process re-validates identity and values
         if (host.control && host.control.sid === peer.sid && ['kd', 'ku', 'md', 'mu', 'wh', 'rel', 'mm'].includes(msg.t)) {
@@ -779,8 +983,43 @@
     }
   }
 
+  const PICTURE_MIMES = ['image/webp', 'image/png', 'image/jpeg'];
+  const PICTURE_ID = /^[A-Za-z0-9]{1,16}$/;
+
+  /** A viewer sends a picture in pieces (reliable channel); when complete it is handed to the overlay window. */
+  function hostPictureChunk(peer, msg) {
+    if (!host.allowDraw || typeof msg.i !== 'string' || !PICTURE_ID.test(msg.i)) return;
+    peer.picIn = peer.picIn || new Map();
+    peer.picIds = peer.picIds || new Set();
+    if (msg.t === 'img-start') {
+      if (!Number.isInteger(msg.n) || msg.n < 1 || msg.n > 200 || peer.picIn.size >= 4 || !PICTURE_MIMES.includes(msg.mime)) return;
+      if (peer.picIds.size >= 8 && !peer.picIds.has(msg.i)) return;
+      peer.picIn.set(msg.i, { n: msg.n, mime: msg.mime, parts: [], got: 0, size: 0 });
+      return;
+    }
+    const e = peer.picIn.get(msg.i);
+    if (!e || typeof msg.d !== 'string' || !Number.isInteger(msg.j) || msg.j < 0 || msg.j >= e.n || e.parts[msg.j] !== undefined) return;
+    e.size += msg.d.length;
+    if (e.size > 6_000_000) {
+      peer.picIn.delete(msg.i);
+      return;
+    }
+    e.parts[msg.j] = msg.d;
+    if (++e.got !== e.n) return;
+    peer.picIn.delete(msg.i);
+    peer.picIds.add(msg.i);
+    stf.drawEvent({ k: 'imgdata', id: peer.sid, n: peer.name, i: msg.i, mime: e.mime, data: e.parts.join('') });
+  }
+
   function onHostDraw(peer, msg) {
-    if (!host.allowDraw || !['cursor', 'laser', 'pen', 'off', 'clear'].includes(msg.k)) return;
+    if (!host.allowDraw || !['cursor', 'laser', 'pen', 'off', 'clear', 'imgt', 'imgdel'].includes(msg.k)) return;
+    if (msg.k === 'imgt' || msg.k === 'imgdel') {
+      if (typeof msg.i !== 'string' || !PICTURE_ID.test(msg.i) || !(peer.picIds && peer.picIds.has(msg.i))) return;
+      stf.drawEvent({ k: msg.k, id: peer.sid, i: msg.i, x: msg.x, y: msg.y, w: msg.w, rot: msg.rot, cl: msg.cl, ct: msg.ct, cr: msg.cr, cb: msg.cb });
+      if (msg.k === 'imgdel') peer.picIds.delete(msg.i);
+      return;
+    }
+    if (msg.k === 'clear' && peer.picIds) peer.picIds.clear();
     stf.drawEvent({ k: msg.k === 'laser' ? 'cursor' : msg.k, id: peer.sid, n: peer.name, h: Number(msg.h) || hueFor(peer.sid), c: msg.c, w: msg.w, t: msg.t, x: msg.x, y: msg.y, s: msg.s, perm: msg.perm === true });
   }
 
@@ -816,6 +1055,9 @@
   function bindHost() {
     $('btnStopShare').addEventListener('click', () => stopSharing());
     $('btnClearAll').addEventListener('click', () => stf.drawEvent({ k: 'clearall', id: 'host' }));
+    $('selHostQuality').addEventListener('change', () => {
+      applyHostQuality($('selHostQuality').value, true);
+    });
     $('chkAllowDraw').addEventListener('change', (e) => {
       host.allowDraw = e.target.checked;
       setPref('allowDraw', host.allowDraw);
@@ -879,6 +1121,7 @@
     }
     $('connectError').classList.add('hidden');
     viewer.creds = { hostId, password };
+    viewer.fromSaved = false;
     viewer.leaving = false;
     await openViewerSession(false);
   }
@@ -914,6 +1157,8 @@
       $('viewerBusy').classList.add('gone');
       $('connectError').classList.add('hidden');
       $('userSub').textContent = 'Online';
+      rememberFriend(viewer.creds.hostId, viewer.creds.password, viewer.info.name || '');
+      renderFriends();
       applyViewerQuality();
       startViewerStats();
       showBar();
@@ -923,17 +1168,27 @@
       viewer.connecting = false;
       const code = errText(err);
       if (isRetry && !['wrong-password'].includes(code)) throw err; // the retry loop handles it
+      const failedId = viewer.creds && viewer.creds.hostId;
       viewer.peer = null;
       viewer.creds = null;
       showView(host.active ? 'host' : 'welcome');
       $('connectError').textContent = ERRORS[code] || `Verbindung fehlgeschlagen (${code}).`;
+      if (viewer.fromSaved && failedId && ['wrong-password', 'host-not-verified'].includes(code)) {
+        // the saved password no longer fits: let the user type the new one
+        $('peerId').value = A.formatId(failedId);
+        $('peerPw').value = '';
+        $('connectError').textContent = 'Das Passwort hat sich geändert – gib das neue ein.';
+        $('peerPw').focus();
+      }
       $('connectError').classList.remove('hidden');
+      renderFriends();
       updateConnectButton();
     }
   }
 
   function onViewerClosed(peer, reason) {
     if (viewer.peer !== peer) return;
+    clearPictures(); // the streamer's overlay dropped them with the connection
     clearInterval(viewer.statsTimer);
     endControl(null, false);
     drawSetMode(null);
@@ -976,6 +1231,7 @@
 
   function leaveViewer() {
     viewer.leaving = true;
+    clearPictures();
     clearInterval(viewer.statsTimer);
     endControl(null, true);
     drawSetMode(null);
@@ -988,13 +1244,17 @@
     $('btnStats').setAttribute('aria-pressed', 'false');
     showView(host.active ? 'host' : 'welcome');
     updateConnectButton();
+    renderFriends();
     refreshUpdateBanner();
   }
 
   function onViewerMessage(msg) {
     switch (msg.t) {
       case 'info':
-        if (typeof msg.name === 'string') viewer.info.name = msg.name;
+        if (typeof msg.name === 'string') {
+          viewer.info.name = msg.name;
+          if (viewer.creds) rememberFriend(viewer.creds.hostId, viewer.creds.password, msg.name);
+        }
         if (typeof msg.allowDraw === 'boolean') viewer.info.allowDraw = msg.allowDraw;
         updateViewerTools();
         break;
@@ -1143,7 +1403,7 @@
 
   function updateViewerTools() {
     const ok = canDraw();
-    for (const id of ['btnCursor', 'btnPenTemp', 'btnPenPerm', 'btnClearMine']) $(id).disabled = !ok;
+    for (const id of ['btnCursor', 'btnPenTemp', 'btnPenPerm', 'btnImage', 'btnClearMine']) $(id).disabled = !ok;
     const why = !viewer.info.allowDraw ? 'Der Streamer hat das Zeichnen ausgeschaltet' : ctl.state === 'granted' ? 'Nicht während der Fernsteuerung' : 'Noch nicht verbunden';
     $('btnCursor').title = ok ? 'Mauszeiger – dein Freund sieht, wohin du zeigst (M)' : why;
     $('btnControl').disabled = !(viewer.peer && viewer.peer.connected && ctl.state === 'idle');
@@ -1167,11 +1427,18 @@
     $('btnCursor').setAttribute('aria-pressed', String(mode === 'cursor'));
     $('btnPenTemp').setAttribute('aria-pressed', String(mode === 'temp'));
     $('btnPenPerm').setAttribute('aria-pressed', String(mode === 'perm'));
+    $('btnImage').setAttribute('aria-pressed', String(mode === 'image'));
+    $('viewerWrap').classList.toggle('picmode', mode === 'image');
+    if (mode !== 'image') {
+      pics.sel = null;
+      pics.drag = null;
+      $('drawCanvas').style.cursor = '';
+    }
     $('viewerWrap').classList.toggle('drawing', Boolean(mode));
     $('viewerWrap').classList.toggle('pointing', mode === 'cursor');
     renderDrawPanel();
     showBar(); // keyboard shortcuts must reveal the bar and panel too
-    if (mode) showHint(mode === 'cursor' ? 'Mauszeiger – dein Freund sieht jede Bewegung' : mode === 'temp' ? 'Zeichnen (verblasst) – Maustaste gedrückt halten' : 'Zeichnen (bleibt) – mit dem Papierkorb löschen', 3000);
+    if (mode) showHint(mode === 'image' ? 'Bild – ziehen, Ecken skalieren, oben drehen, Alt + ziehen zuschneiden' : mode === 'cursor' ? 'Mauszeiger – dein Freund sieht jede Bewegung' : mode === 'temp' ? 'Zeichnen (verblasst) – Maustaste gedrückt halten' : 'Zeichnen (bleibt) – mit dem Papierkorb löschen', 3000);
   }
 
   function sendDraw(msg) {
@@ -1187,22 +1454,6 @@
     const c = $('sizePreview');
     const g = c.getContext('2d');
     g.clearRect(0, 0, c.width, c.height);
-    if (draw.mode === 'cursor') {
-      const k = 0.9 + draw.size / 30;
-      g.save();
-      g.translate(40, 6);
-      g.scale(k, k);
-      g.beginPath();
-      [[0, 0], [0, 16.5], [4.2, 12.6], [7.1, 19.2], [9.7, 18], [6.9, 11.7], [12.2, 11.7]].forEach((p, i) => (i ? g.lineTo(p[0], p[1]) : g.moveTo(p[0], p[1])));
-      g.closePath();
-      g.fillStyle = draw.color;
-      g.fill();
-      g.lineWidth = 1.5;
-      g.strokeStyle = '#fff';
-      g.stroke();
-      g.restore();
-      return;
-    }
     const look = Style.penStyle(draw.tool, draw.size, 0.55);
     g.globalAlpha = look.alpha;
     g.strokeStyle = draw.color;
@@ -1220,14 +1471,19 @@
 
   function renderDrawPanel() {
     const panel = $('drawPanel');
-    panel.classList.toggle('hidden', !draw.mode);
-    if (!draw.mode) return;
-    $('toolRow').classList.toggle('hidden', draw.mode === 'cursor');
-    for (const b of panel.querySelectorAll('.tool-btn')) b.classList.toggle('active', b.dataset.tool === draw.tool);
+    const pen = draw.mode === 'temp' || draw.mode === 'perm';
+    // the mouse pointer is always the plain white standard pointer: nothing to set
+    panel.classList.toggle('hidden', !pen && draw.mode !== 'image');
+    $('toolRow').classList.toggle('hidden', !pen);
+    $('colorRow').classList.toggle('hidden', !pen);
+    $('sizeRow').classList.toggle('hidden', !pen);
+    $('imageRow').classList.toggle('hidden', draw.mode !== 'image');
+    if (!pen) return;
+    for (const b of panel.querySelectorAll('.tool-btn[data-tool]')) b.classList.toggle('active', b.dataset.tool === draw.tool);
     for (const b of $('swatches').children) b.classList.toggle('active', b.dataset.color === draw.color);
     $('colorCustom').value = draw.color;
     $('sizeRange').value = String(draw.size);
-    $('sizeLabel').textContent = draw.mode === 'cursor' ? 'Größe' : 'Dicke';
+    $('sizeLabel').textContent = 'Dicke';
     paintPreview();
   }
 
@@ -1237,7 +1493,6 @@
     else if (key === 'tool') draw.tool = Style.cleanTool(value);
     setPref(`draw${key[0].toUpperCase()}${key.slice(1)}`, draw[key]);
     renderDrawPanel();
-    if (draw.mode === 'cursor' && draw.lastPos) sendDraw({ k: 'cursor', x: draw.lastPos.x, y: draw.lastPos.y }); // show the new look right away
   }
 
   function bindDrawPanel() {
@@ -1252,7 +1507,7 @@
       b.addEventListener('click', () => setDrawOption('color', color));
       sw.appendChild(b);
     }
-    for (const b of $('drawPanel').querySelectorAll('.tool-btn')) b.addEventListener('click', () => setDrawOption('tool', b.dataset.tool));
+    for (const b of $('drawPanel').querySelectorAll('.tool-btn[data-tool]')) b.addEventListener('click', () => setDrawOption('tool', b.dataset.tool));
     $('colorCustom').addEventListener('input', (e) => setDrawOption('color', e.target.value));
     $('sizeRange').addEventListener('input', (e) => setDrawOption('size', e.target.value));
     // Keep the panel clear of the bar even when the bar wraps onto two lines.
@@ -1301,6 +1556,7 @@
     const dpr = draw.dpr;
     const scale = (rect.w * dpr) / 1920;
     let active = false;
+    drawPictures(ctx, rect, dpr);
     draw.strokes = draw.strokes.filter((s) => s.perm || now - s.last < TEMP_HOLD_MS + TEMP_FADE_MS);
     for (const s of draw.strokes) {
       let alpha = 1;
@@ -1340,11 +1596,333 @@
     drawKick();
   }
 
+  /* ---- pictures on the streamer's screen ---- */
+
+  const pics = { list: [], sel: null, drag: null, seq: 0, pendingId: null, sendTimer: 0 };
+  const PIC_MAX_DIM = 1600;
+  const PIC_MAX_BYTES = 3_500_000;
+  const PIC_MAX_COUNT = 8;
+  const HANDLE_R = 11;
+  const ROT_OFFSET = 30;
+
+  const picById = (id) => pics.list.find((p) => p.id === id);
+
+  function picGeometry(p, rect) {
+    return Style.imageGeometry(p.t, p.nat, rect.w, rect.h);
+  }
+
+  function arrayBufferToBase64(buf) {
+    const bytes = new Uint8Array(buf);
+    let s = '';
+    for (let i = 0; i < bytes.length; i += 0x8000) s += String.fromCharCode.apply(null, bytes.subarray(i, i + 0x8000));
+    return btoa(s);
+  }
+
+  async function addPictureFile(file) {
+    if (!canDraw()) {
+      toast('Bilder gehen nur, wenn du verbunden bist und der Streamer Zeichnen erlaubt.', 'error', 4000);
+      return;
+    }
+    if (pics.list.length >= PIC_MAX_COUNT) {
+      toast(`Höchstens ${PIC_MAX_COUNT} Bilder gleichzeitig – entferne erst eins.`, 'error', 4000);
+      return;
+    }
+    let bmp;
+    try {
+      bmp = await createImageBitmap(file);
+    } catch {
+      toast('Diese Datei konnte nicht als Bild gelesen werden.', 'error', 4000);
+      return;
+    }
+    const scale = Math.min(1, PIC_MAX_DIM / Math.max(bmp.width, bmp.height));
+    const w = Math.max(1, Math.round(bmp.width * scale));
+    const h = Math.max(1, Math.round(bmp.height * scale));
+    const cv = document.createElement('canvas');
+    cv.width = w;
+    cv.height = h;
+    cv.getContext('2d').drawImage(bmp, 0, 0, w, h);
+    bmp.close();
+    let blob = await new Promise((resolve) => cv.toBlob(resolve, 'image/webp', 0.9));
+    if (!blob || blob.type !== 'image/webp') blob = await new Promise((resolve) => cv.toBlob(resolve, 'image/png'));
+    for (let q = 0.8; blob && blob.size > PIC_MAX_BYTES && q > 0.35; q -= 0.15) blob = await new Promise((resolve) => cv.toBlob(resolve, 'image/webp', q));
+    if (!blob || blob.size > PIC_MAX_BYTES) {
+      toast('Das Bild ist zu groß.', 'error', 4000);
+      return;
+    }
+    const b64 = arrayBufferToBase64(await blob.arrayBuffer());
+    const id = `${Date.now().toString(36)}${(pics.seq++).toString(36)}`.slice(-14);
+    const rect = contentRect();
+    if (!rect) return;
+    const aspect = w / h;
+    const t = Style.cleanTransform({ x: 0.5, y: 0.5, w: Math.min(0.4, (0.5 * rect.h * aspect) / rect.w), rot: 0 });
+    pics.list.push({ id, canvas: cv, nat: { w, h }, t });
+    pics.sel = id;
+    drawSetMode('image');
+    drawKick();
+    try {
+      await uploadPicture(id, blob.type, b64);
+      sendPicTransform(id, true);
+    } catch (err) {
+      toast(`Bild konnte nicht gesendet werden: ${errText(err)}`, 'error', 5000);
+    }
+  }
+
+  async function uploadPicture(id, mime, b64) {
+    const peer = viewer.peer;
+    const n = Math.ceil(b64.length / CLIP_CHUNK);
+    await sendBig(peer, { t: 'img-start', i: id, n, mime });
+    for (let j = 0; j < n; j++) await sendBig(peer, { t: 'img-chunk', i: id, j, d: b64.slice(j * CLIP_CHUNK, (j + 1) * CLIP_CHUNK) });
+  }
+
+  function sendPicTransform(id, reliable) {
+    const p = picById(id);
+    if (!p || !viewer.peer || !viewer.peer.connected) return;
+    const msg = { d: 1, k: 'imgt', i: id, x: p.t.x, y: p.t.y, w: p.t.w, rot: p.t.rot, cl: p.t.cl, ct: p.t.ct, cr: p.t.cr, cb: p.t.cb };
+    if (reliable) viewer.peer.sendCtl(msg);
+    else viewer.peer.sendFast(msg);
+  }
+
+  function queuePicSend(id) {
+    pics.pendingId = id;
+    if (pics.sendTimer) return;
+    pics.sendTimer = setTimeout(() => {
+      pics.sendTimer = 0;
+      const pending = pics.pendingId;
+      pics.pendingId = null;
+      if (pending) sendPicTransform(pending, false);
+    }, 25);
+  }
+
+  function removePicture(id) {
+    const i = pics.list.findIndex((p) => p.id === id);
+    if (i < 0) return;
+    pics.list.splice(i, 1);
+    if (pics.sel === id) pics.sel = null;
+    if (viewer.peer && viewer.peer.connected) viewer.peer.sendCtl({ d: 1, k: 'imgdel', i: id });
+    drawKick();
+  }
+
+  function clearPictures() {
+    pics.list = [];
+    pics.sel = null;
+    pics.drag = null;
+  }
+
+  /** Pointer in content pixels (relative to the shown picture of the stream). */
+  function picPointer(e) {
+    const rect = contentRect();
+    if (!rect) return null;
+    const box = $('drawCanvas').getBoundingClientRect();
+    return { rect, x: e.clientX - box.left - rect.x, y: e.clientY - box.top - rect.y };
+  }
+
+  function picHit(pt) {
+    const sel = picById(pics.sel);
+    if (sel) {
+      const g = picGeometry(sel, pt.rect);
+      const l = Style.toImageSpace(g, pt.x, pt.y);
+      if (Math.hypot(l.lx, l.ly + g.ph / 2 + ROT_OFFSET) < HANDLE_R + 3) return { pic: sel, part: 'rot' };
+      for (const [sx, sy] of [[-1, -1], [1, -1], [1, 1], [-1, 1]]) {
+        if (Math.hypot(l.lx - (sx * g.pw) / 2, l.ly - (sy * g.ph) / 2) < HANDLE_R + 3) return { pic: sel, part: 'corner' };
+      }
+    }
+    for (let i = pics.list.length - 1; i >= 0; i--) {
+      const p = pics.list[i];
+      const g = picGeometry(p, pt.rect);
+      const l = Style.toImageSpace(g, pt.x, pt.y);
+      if (Math.abs(l.lx) <= g.pw / 2 && Math.abs(l.ly) <= g.ph / 2) return { pic: p, part: 'body' };
+    }
+    return null;
+  }
+
+  function picPointerDown(e) {
+    const pt = picPointer(e);
+    if (!pt) return;
+    const hit = picHit(pt);
+    if (!hit) {
+      pics.sel = null;
+      drawKick();
+      return;
+    }
+    e.preventDefault();
+    $('drawCanvas').setPointerCapture(e.pointerId);
+    const p = hit.pic;
+    pics.sel = p.id;
+    // bring to front
+    pics.list.splice(pics.list.indexOf(p), 1);
+    pics.list.push(p);
+    const g = picGeometry(p, pt.rect);
+    if (hit.part === 'body' && e.altKey) {
+      const l = Style.toImageSpace(g, pt.x, pt.y);
+      pics.drag = { type: 'crop', id: p.id, u0: l.u, v0: l.v, u1: l.u, v1: l.v };
+    } else if (hit.part === 'rot') {
+      pics.drag = { type: 'rot', id: p.id };
+    } else if (hit.part === 'corner') {
+      pics.drag = { type: 'scale', id: p.id, d0: Math.max(10, Math.hypot(pt.x - g.cx, pt.y - g.cy)), w0: p.t.w };
+    } else {
+      pics.drag = { type: 'move', id: p.id, ox: g.cx - pt.x, oy: g.cy - pt.y };
+    }
+    drawKick();
+  }
+
+  function picPointerMove(e) {
+    const pt = picPointer(e);
+    if (!pt) return;
+    const d = pics.drag;
+    if (!d) {
+      const hit = picHit(pt);
+      $('drawCanvas').style.cursor = !hit ? 'default' : hit.part === 'rot' ? 'grab' : hit.part === 'corner' ? 'nwse-resize' : e.altKey ? 'crosshair' : 'move';
+      return;
+    }
+    const p = picById(d.id);
+    if (!p) return;
+    const g = picGeometry(p, pt.rect);
+    if (d.type === 'move') {
+      p.t = Style.cleanTransform({ ...p.t, x: (pt.x + d.ox) / pt.rect.w, y: (pt.y + d.oy) / pt.rect.h });
+    } else if (d.type === 'scale') {
+      const dist = Math.max(10, Math.hypot(pt.x - g.cx, pt.y - g.cy));
+      p.t = Style.cleanTransform({ ...p.t, w: d.w0 * (dist / d.d0) });
+    } else if (d.type === 'rot') {
+      let rot = Math.atan2(pt.y - g.cy, pt.x - g.cx) + Math.PI / 2;
+      if (e.shiftKey) rot = Math.round(rot / (Math.PI / 12)) * (Math.PI / 12);
+      p.t = Style.cleanTransform({ ...p.t, rot });
+    } else if (d.type === 'crop') {
+      const l = Style.toImageSpace(g, pt.x, pt.y);
+      d.u1 = Math.min(1, Math.max(0, l.u));
+      d.v1 = Math.min(1, Math.max(0, l.v));
+    }
+    if (d.type !== 'crop') queuePicSend(p.id);
+    drawKick();
+  }
+
+  function picPointerUp() {
+    const d = pics.drag;
+    pics.drag = null;
+    if (!d) return;
+    const p = picById(d.id);
+    if (!p) return;
+    if (d.type === 'crop') {
+      const rect = contentRect();
+      if (rect) p.t = Style.cropTo(p.t, p.nat, d.u0, d.v0, d.u1, d.v1, rect.w, rect.h);
+    }
+    sendPicTransform(p.id, true);
+    drawKick();
+  }
+
+  /** The picture being edited, drawn locally with its frame and handles (everything else is in the stream anyway). */
+  function drawPictures(ctx, rect, dpr) {
+    if (draw.mode !== 'image') return;
+    for (const p of pics.list) {
+      const g = picGeometry(p, rect);
+      ctx.save();
+      ctx.globalAlpha = 1;
+      ctx.translate((rect.x + g.cx) * dpr, (rect.y + g.cy) * dpr);
+      ctx.rotate(g.rot);
+      ctx.drawImage(p.canvas, g.sx, g.sy, g.sw, g.sh, (-g.pw / 2) * dpr, (-g.ph / 2) * dpr, g.pw * dpr, g.ph * dpr);
+      if (p.id === pics.sel) {
+        const hw = (g.pw / 2) * dpr;
+        const hh = (g.ph / 2) * dpr;
+        ctx.lineWidth = 2 * dpr;
+        ctx.strokeStyle = '#5865f2';
+        ctx.strokeRect(-hw, -hh, hw * 2, hh * 2);
+        ctx.beginPath();
+        ctx.moveTo(0, -hh);
+        ctx.lineTo(0, -hh - ROT_OFFSET * dpr);
+        ctx.stroke();
+        ctx.fillStyle = '#ffffff';
+        for (const [x, y] of [[-hw, -hh], [hw, -hh], [hw, hh], [-hw, hh], [0, -hh - ROT_OFFSET * dpr]]) {
+          ctx.beginPath();
+          ctx.arc(x, y, 6 * dpr, 0, Math.PI * 2);
+          ctx.fill();
+          ctx.stroke();
+        }
+        const d = pics.drag;
+        if (d && d.type === 'crop') {
+          const u0 = Math.min(d.u0, d.u1);
+          const u1 = Math.max(d.u0, d.u1);
+          const v0 = Math.min(d.v0, d.v1);
+          const v1 = Math.max(d.v0, d.v1);
+          ctx.fillStyle = 'rgba(0, 0, 0, 0.55)';
+          ctx.fillRect(-hw, -hh, hw * 2, hh * 2);
+          ctx.save();
+          ctx.beginPath();
+          ctx.rect(-hw + u0 * hw * 2, -hh + v0 * hh * 2, (u1 - u0) * hw * 2, (v1 - v0) * hh * 2);
+          ctx.clip();
+          ctx.drawImage(p.canvas, g.sx, g.sy, g.sw, g.sh, -hw, -hh, hw * 2, hh * 2);
+          ctx.restore();
+          ctx.setLineDash([6 * dpr, 4 * dpr]);
+          ctx.strokeStyle = '#ffffff';
+          ctx.strokeRect(-hw + u0 * hw * 2, -hh + v0 * hh * 2, (u1 - u0) * hw * 2, (v1 - v0) * hh * 2);
+          ctx.setLineDash([]);
+        }
+      }
+      ctx.restore();
+    }
+  }
+
+  function bindPictures() {
+    const canvas = $('drawCanvas');
+    $('btnImage').addEventListener('click', () => {
+      if (draw.mode === 'image') {
+        drawSetMode(null);
+        return;
+      }
+      drawSetMode('image');
+      if (!pics.list.length) $('imgFile').click();
+    });
+    $('btnImgAdd').addEventListener('click', () => $('imgFile').click());
+    $('imgFile').addEventListener('change', async (e) => {
+      const files = [...e.target.files];
+      e.target.value = '';
+      for (const f of files.slice(0, PIC_MAX_COUNT)) await addPictureFile(f);
+    });
+    $('btnImgDelete').addEventListener('click', () => pics.sel && removePicture(pics.sel));
+    $('btnImgReset').addEventListener('click', () => {
+      const p = picById(pics.sel);
+      if (!p) return;
+      const rect = contentRect();
+      if (!rect) return;
+      // back to the full picture, keeping its centre and its width on screen where possible
+      const fw = 1 - p.t.cl - p.t.cr;
+      p.t = Style.cleanTransform({ ...p.t, cl: 0, cr: 0, ct: 0, cb: 0, w: p.t.w / fw });
+      sendPicTransform(p.id, true);
+      drawKick();
+    });
+    canvas.addEventListener('wheel', (e) => {
+      const p = picById(pics.sel);
+      if (draw.mode !== 'image' || !p) return;
+      e.preventDefault();
+      p.t = Style.cleanTransform({ ...p.t, w: p.t.w * (e.deltaY < 0 ? 1.06 : 1 / 1.06) });
+      queuePicSend(p.id);
+      drawKick();
+    }, { passive: false });
+    // paste (Strg+V) and drag & drop of image files anywhere on the viewer
+    window.addEventListener('paste', (e) => {
+      if (!viewer.peer || ctl.engaged || ['INPUT', 'TEXTAREA'].includes((e.target && e.target.tagName) || '')) return;
+      const file = [...((e.clipboardData && e.clipboardData.files) || [])].find((f) => f.type.startsWith('image/'));
+      if (file) {
+        e.preventDefault();
+        addPictureFile(file);
+      }
+    });
+    window.addEventListener('dragover', (e) => e.preventDefault());
+    window.addEventListener('drop', (e) => {
+      e.preventDefault(); // never let the window navigate to a dropped file
+      if (!viewer.peer) return;
+      for (const f of [...((e.dataTransfer && e.dataTransfer.files) || [])].filter((x) => x.type.startsWith('image/')).slice(0, PIC_MAX_COUNT)) addPictureFile(f);
+    });
+  }
+
   function bindDrawing() {
     const canvas = $('drawCanvas');
     new ResizeObserver(drawResize).observe($('viewerWrap'));
     bindDrawPanel();
+    bindPictures();
     canvas.addEventListener('pointerdown', (e) => {
+      if (draw.mode === 'image') {
+        picPointerDown(e);
+        return;
+      }
       if (draw.mode !== 'temp' && draw.mode !== 'perm') return;
       const p = normalizedPoint(e);
       if (!p) return;
@@ -1357,6 +1935,10 @@
       drawKick();
     });
     canvas.addEventListener('pointermove', (e) => {
+      if (draw.mode === 'image') {
+        picPointerMove(e);
+        return;
+      }
       if (!draw.mode) return;
       const p = normalizedPoint(e);
       if (!p) return;
@@ -1372,7 +1954,10 @@
       }
       drawKick();
     });
-    const up = () => (draw.down = false);
+    const up = () => {
+      draw.down = false;
+      if (draw.mode === 'image') picPointerUp();
+    };
     canvas.addEventListener('pointerup', up);
     canvas.addEventListener('pointercancel', up);
     canvas.addEventListener('pointerleave', () => {
@@ -1382,10 +1967,12 @@
       }
     });
     const toggle = (m) => drawSetMode(draw.mode === m ? null : m);
+    $('btnImage').dataset.mode = 'image';
     $('btnCursor').addEventListener('click', () => toggle('cursor'));
     $('btnPenTemp').addEventListener('click', () => toggle('temp'));
     $('btnPenPerm').addEventListener('click', () => toggle('perm'));
     $('btnClearMine').addEventListener('click', () => {
+      clearPictures();
       draw.strokes = [];
       draw.lastPos = null;
       sendDraw({ k: 'clear' });
@@ -1398,6 +1985,8 @@
       else if (e.code === 'KeyP') toggle('temp');
       else if (e.code === 'KeyO') toggle('perm');
       else if (e.code === 'KeyC') $('btnClearMine').click();
+      else if (e.code === 'KeyB') toggle('image');
+      else if ((e.code === 'Delete' || e.code === 'Backspace') && draw.mode === 'image' && pics.sel) removePicture(pics.sel);
       else if (e.code === 'KeyF' || e.code === 'F11') {
         e.preventDefault();
         toggleFullscreen();
@@ -1809,9 +2398,10 @@
     state.prefs = settings.prefs || {};
     state.myId = settings.id;
 
-    if (info.dev) window.__stfDebug = { state, host, viewer, ctl, apps, draw }; // dev builds only (for the automated tests)
+    if (info.dev) window.__stfDebug = { state, host, viewer, ctl, apps, draw, pics, addPictureFile }; // dev builds only (for the automated tests)
     host.allowDraw = state.prefs.allowDraw !== false;
     $('chkAllowDraw').checked = host.allowDraw;
+    applyHostQuality(/^f?[0-4]$/.test(String(state.prefs.hostQuality)) ? String(state.prefs.hostQuality) : '0', false);
     $('viewVolume').value = typeof state.prefs.volume === 'number' ? state.prefs.volume : 100;
     $('selQuality').value = ['0', '1', '2', '3', '4'].includes(state.prefs.quality) ? state.prefs.quality : '0';
     apps.mode = ['all', 'include', 'exclude'].includes(state.prefs.audioMode) ? state.prefs.audioMode : 'exclude';
@@ -1820,8 +2410,12 @@
     draw.size = Style.cleanSize(state.prefs.drawSize);
     draw.tool = Style.cleanTool(state.prefs.drawTool);
 
-    newPassword();
+    await initHostPassword();
+    await loadFriends();
+    $('chkRemember').checked = state.prefs.rememberPw !== false;
+    $('rememberRow').classList.toggle('hidden', !state.persist);
     renderIdentity();
+    renderFriends();
     bindSidebar();
     bindPicker();
     bindAudio();

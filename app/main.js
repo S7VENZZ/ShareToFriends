@@ -11,7 +11,7 @@
  * The WebRTC session itself (signaling, authentication, media) lives in the renderer.
  */
 
-const { app, BrowserWindow, Menu, ipcMain, globalShortcut, desktopCapturer, screen, session } = require('electron');
+const { app, BrowserWindow, Menu, ipcMain, globalShortcut, desktopCapturer, screen, session, safeStorage } = require('electron');
 const path = require('path');
 const fs = require('fs');
 const crypto = require('crypto');
@@ -22,6 +22,7 @@ const { KeyHook } = require('./key-hook');
 const { AppAudio } = require('./app-audio');
 const { DrawOverlay } = require('./draw-overlay');
 const DrawStyle = require('./draw-style');
+const { Secrets } = require('./secrets');
 
 const IS_DEV = process.argv.includes('--dev');
 const INDEX_FILE = path.join(__dirname, 'index.html');
@@ -231,8 +232,11 @@ function handle(channel, fn) {
 }
 
 /** Draw events from viewers are validated here before they reach the overlay window. */
+const IMAGE_MIMES = new Set(['image/webp', 'image/png', 'image/jpeg']);
+const MAX_IMAGE_B64 = 6_000_000;
+
 function cleanDrawEvent(ev) {
-  const kinds = ['cursor', 'pen', 'clear', 'clearall', 'off'];
+  const kinds = ['cursor', 'pen', 'clear', 'clearall', 'off', 'imgdata', 'imgt', 'imgdel'];
   if (ev && ev.k === 'laser') ev = { ...ev, k: 'cursor' }; // clients before 2.0.1 sent "laser"
   if (!ev || typeof ev !== 'object' || !kinds.includes(ev.k)) return null;
   const id = typeof ev.id === 'string' ? ev.id.slice(0, 64) : '';
@@ -250,6 +254,18 @@ function cleanDrawEvent(ev) {
     out.c = DrawStyle.cleanColor(ev.c, DrawStyle.colorFromHue(hue));
     out.w = DrawStyle.cleanSize(ev.w);
     out.t = DrawStyle.cleanTool(ev.t);
+  }
+  if (ev.k === 'imgdata' || ev.k === 'imgt' || ev.k === 'imgdel') {
+    if (typeof ev.i !== 'string' || !/^[A-Za-z0-9]{1,16}$/.test(ev.i)) return null;
+    out.i = ev.i;
+    if (ev.k === 'imgdata') {
+      if (!IMAGE_MIMES.has(ev.mime) || typeof ev.data !== 'string' || ev.data.length < 20 || ev.data.length > MAX_IMAGE_B64) return null;
+      if (!/^[A-Za-z0-9+/]+={0,2}$/.test(ev.data)) return null;
+      out.mime = ev.mime;
+      out.data = ev.data;
+    } else if (ev.k === 'imgt') {
+      Object.assign(out, DrawStyle.cleanTransform({ x: ev.x, y: ev.y, w: ev.w, rot: ev.rot, cl: ev.cl, ct: ev.ct, cr: ev.cr, cb: ev.cb }));
+    }
   }
   return out;
 }
@@ -279,6 +295,12 @@ function registerIpc() {
     return saved;
   });
   handle('settings:setPrefs', (prefs) => savePrefs(prefs));
+
+  // Secrets (host password, saved friends): encrypted with the Windows user account
+  const secrets = new Secrets({ file: path.join(app.getPath('userData'), 'secrets.json'), safeStorage });
+  handle('secret:available', () => secrets.isAvailable());
+  handle('secret:get', (key) => secrets.get(String(key)));
+  handle('secret:set', (key, value) => secrets.set(String(key), value === null ? null : String(value)));
   handle('id:regenerate', () => {
     const s = loadSettings();
     s.id = newId();

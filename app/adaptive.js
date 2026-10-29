@@ -71,7 +71,8 @@
 
     /**
      * @param {{ availableBps?: number, rttMs?: number, qualityLimit?: string, maxTierIndex?: number }} sample
-     *   maxTierIndex: quality the viewer asked for (higher index = lower quality), 0 = no limit
+     *   maxTierIndex: quality limit asked for by the viewer or the streamer (higher index = lower quality), 0 = no limit
+     *   forceTierIndex: the streamer pins one tier (0 = 1080p60 ...); skips the automatic control
      * @param {number} now milliseconds
      */
     function update(sample, now) {
@@ -121,6 +122,15 @@
         cpuFloor = Math.min(TIERS.length - 1, tierIndex + 1);
         cpuUntil = now + o.cpuLockMs;
         reason = 'encoder-load';
+      }
+
+      // --- fixed quality chosen by the streamer: no automatic steps (and no ping guard), viewer limits still apply ---
+      if (Number.isInteger(sample.forceTierIndex) && sample.forceTierIndex >= 0) {
+        const forced = Math.max(Math.min(TIERS.length - 1, sample.forceTierIndex), Math.min(TIERS.length - 1, sample.maxTierIndex || 0));
+        if (forced !== tierIndex) lastTierChange = now;
+        tierIndex = forced;
+        const t = TIERS[forced];
+        return { tierIndex, tier: t, maxBitrate: Math.round(Math.min(o.hardMaxBps, t.minBps * 1.8)), capBps: Math.round(cap), reason: 'fixed' };
       }
 
       // --- tier from the bitrate ceiling -------------------------------------------------------

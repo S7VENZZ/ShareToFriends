@@ -8,7 +8,7 @@
   "scripts": {
     "start": "electron .",
     "dev": "electron . --dev",
-    "test": "node adaptive.test.js && node auth.test.js && node draw-style.test.js",
+    "test": "node adaptive.test.js && node auth.test.js && node draw-style.test.js && node secrets.test.js",
     "build:helper": "helper\\build-helper.cmd",
     "dist": "electron-builder --win nsis --publish never"
   },
@@ -30,6 +30,7 @@
     "files": [
       "main.js",
       "preload.js",
+      "secrets.js",
       "updater.js",
       "update-url.js",
       "key-hook.js",

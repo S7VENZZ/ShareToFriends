@@ -11,6 +11,9 @@ contextBridge.exposeInMainWorld('stf', {
   saveSettings: (settings) => ipcRenderer.invoke('settings:set', settings),
   savePrefs: (prefs) => ipcRenderer.invoke('settings:setPrefs', prefs),
   regenerateId: () => ipcRenderer.invoke('id:regenerate'),
+  secretAvailable: () => ipcRenderer.invoke('secret:available'),
+  secretGet: (key) => ipcRenderer.invoke('secret:get', key),
+  secretSet: (key, value) => ipcRenderer.invoke('secret:set', key, value),
 
   listSources: (opts) => ipcRenderer.invoke('sources:list', opts),
   identifyMonitors: () => ipcRenderer.invoke('monitors:identify'),

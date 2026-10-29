@@ -107,6 +107,18 @@ input[type="checkbox"], input[type="radio"] { accent-color: var(--blurple); widt
 .form-error { color: var(--red); margin: 0; font-weight: 600; font-size: 12px; user-select: text; }
 .inline-check { flex-direction: row; align-items: center; gap: 6px; font-weight: 500; color: var(--text-normal); }
 
+.friends-list { display: flex; flex-direction: column; gap: 2px; max-height: 240px; overflow-y: auto; }
+.friend-row { display: grid; grid-template-columns: 28px minmax(0, 1fr) auto; align-items: center; gap: 8px; padding: 5px 4px; border-radius: 6px; border: 0; background: transparent; color: inherit; font: inherit; text-align: left; cursor: pointer; position: relative; overflow: hidden; isolation: isolate; }
+.friend-row::after { content: ""; position: absolute; inset: 0; background: #fff; opacity: 0; transition: opacity 0.12s; z-index: -1; }
+.friend-row:hover::after, .friend-row:focus-visible::after { opacity: 0.07; }
+.friend-row:disabled { opacity: 0.5; cursor: not-allowed; }
+.friend-row .name { font-weight: 600; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; color: var(--text-strong); }
+.friend-row .sub { font-size: 11px; color: var(--text-muted); }
+.friend-remove { opacity: 0; width: 24px; height: 24px; border: 0; border-radius: 6px; background: transparent; color: var(--text-muted); cursor: pointer; font-size: 15px; line-height: 1; }
+.friend-row:hover .friend-remove, .friend-row:focus-within .friend-remove { opacity: 1; }
+.friend-remove:hover { color: var(--red); background: rgba(255, 255, 255, 0.06); }
+#pwProblem.bad { color: var(--red); }
+#pwHint { margin-top: -2px; }
 .viewer-list { display: flex; flex-direction: column; gap: 4px; max-height: 220px; overflow-y: auto; }
 .viewer-row { display: grid; grid-template-columns: 28px minmax(0, 1fr) auto; align-items: center; gap: 8px; padding: 4px; border-radius: 6px; }
 .viewer-row .name { font-weight: 600; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
@@ -186,6 +198,10 @@ input[type="checkbox"], input[type="radio"] { accent-color: var(--blurple); widt
 .draw-panel.hidden { display: none; }
 .panel-row { display: flex; align-items: center; gap: 8px; }
 .panel-row.hidden { display: none; }
+.panel-col { display: flex; flex-direction: column; gap: 8px; max-width: 520px; }
+.panel-col.hidden { display: none; }
+.panel-col .hint { line-height: 1.4; }
+.viewer-wrap.picmode .draw-canvas { cursor: default; }
 .panel-label { width: 44px; font-size: 12px; font-weight: 600; color: var(--text-muted); }
 .tool-btn { flex: 1; display: inline-flex; align-items: center; justify-content: center; gap: 6px; border: 0; border-radius: 8px; padding: 7px 10px; font: inherit; font-size: 12.5px; font-weight: 600; background: #232428; color: var(--text-normal); cursor: pointer; transition: transform 0.12s var(--ease); }
 .tool-btn:hover { background: #2e3035; }

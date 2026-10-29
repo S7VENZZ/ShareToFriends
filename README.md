@@ -60,14 +60,18 @@ Auf dem Heimnetz/Router ist **nichts** zu tun.
 3. **Streamer:** „Bildschirm teilen“ → Monitor oder Fenster wählen. Die App zeigt deine **ID** und dein **Passwort**; beides dem Freund geben.
 4. **Zuschauer:** ID und Passwort eintragen → „Verbinden“.
 
-Das Passwort ändert sich per Knopfdruck (↻) jederzeit; die ID bleibt gleich. Falsche Passwörter werden abgewiesen; nach 5 Fehlversuchen innerhalb von 10 Minuten erneuert die App das Passwort automatisch.
+**Passwort und ID bleiben gespeichert**, auch nach einem Neustart der App. Das Passwort ändert sich nur, wenn du es willst:
+- **↻** erzeugt ein neues zufälliges Passwort,
+- **✎** lässt dich ein **eigenes, dauerhaftes Passwort** festlegen (10–64 Zeichen), das du deinen Freunden gibst.
+
+Wer sich verbindet, bekommt es unter **„Zuletzt verbunden“** angezeigt: Die App merkt sich Name, ID und Passwort (verschlüsselt mit deinem Windows-Konto, abschaltbar mit „Passwort merken“), und ein Klick genügt für die nächste Verbindung. Ändert der Streamer sein Passwort, fragt die App nach dem neuen. Falsche Passwörter werden abgewiesen; nach 5 Fehlversuchen innerhalb von 10 Minuten sind neue Anmeldungen 10 Minuten gesperrt (das Passwort bleibt dabei unverändert).
 
 ## Funktionen
 
 **Stream (Discord-Stil)**
 - Fenster **oder** Monitor teilen; Wechsel während des Streams per Klick ohne Neuverbindung (gemessen ≈ 0,3 s).
-- Schwebende Stream-Leiste unten beim Zuschauer: Lautstärke, Zoom, Qualitätsdeckel, Mauszeiger/Zeichnen, **Vollbild** (Taste **F** oder **F11**, Doppelklick aufs Bild; **Esc** beendet).
-- Vollautomatische Qualität: keine Bitraten- oder Codec-Regler. Die App nutzt die Überlastregelung von WebRTC und zusätzlich einen **Ping-Schutz**: Steigt die Latenz der Leitung des Hosts (Bufferbloat, z. B. weil ein Spiel Bandbreite braucht), drosselt der Stream selbst und geht danach von allein wieder auf die höchste Stufe (bis 1080p60). Der Zuschauer kann nur eine Obergrenze wählen („Auto“, 720p60, 540p30 …).
+- Schwebende Stream-Leiste unten beim Zuschauer: Lautstärke, Zoom, Qualitätsdeckel, Mauszeiger/Zeichnen/Bilder, **Vollbild** (Taste **F** oder **F11**, Doppelklick aufs Bild; **Esc** beendet).
+- Vollautomatische Qualität: keine Bitraten- oder Codec-Regler. Die App nutzt die Überlastregelung von WebRTC und zusätzlich einen **Ping-Schutz**: Steigt die Latenz der Leitung des Hosts (Bufferbloat, z. B. weil ein Spiel Bandbreite braucht), drosselt der Stream selbst und geht danach von allein wieder auf die höchste Stufe (bis 1080p60). Der Zuschauer kann nur eine Obergrenze wählen („Auto“, 720p60, 540p30 …). Der **Streamer** wählt in seiner Leiste die Qualität: *Auto* (bis 1080p60, optional mit Obergrenze) oder eine **feste Stufe** (1080p60, 720p60, 720p30) – fest hält die Stufe immer, dann aber ohne Ping-Schutz.
 - H.264 bevorzugt (Hardware-Encoder, falls vorhanden), VP8 als Rückfall; Opus-Stereo 128 kbit/s.
 
 **Audio**
@@ -79,8 +83,9 @@ Das Passwort ändert sich per Knopfdruck (↻) jederzeit; die ID bleibt gleich. 
 - Zuschauer klickt „Steuerung anfragen“ → beim Host erscheint immer ein Dialog: *„Zugriff für [Name] erlauben? [Ja] [Nein]“*.
 - Dauerhafte Leiste „Remote-Zugriff aktiv“ mit „Sofort beenden“; **F12** am Host-PC ist der Notaus (global per Low-Level-Tastaturhook erkannt, solange jemand fernsteuert).
 - Maus, Tastatur inkl. Windows-Taste/Alt+Tab/Strg+C/V, **Zwischenablage in beide Richtungen (Text und Bilder)**.
-- **Mauszeiger:** Dein Freund sieht auf seinem Bildschirm deinen Zeiger (Pfeil in deiner Farbe mit deinem Namen) und kann so genau verfolgen, wohin du zeigst. Taste **M**.
-- **Zeichnen** mit **Bleistift** (dünn), **Filzstift** (kräftig) oder **Marker** (breit, durchscheinend); **beliebige Farbe** (10 Vorgaben plus Farbwähler) und **Größe** per Regler. Zwei Modi: *verblasst* (Taste **P**) und *bleibt* (Taste **O**). **C** löscht deine Zeichnungen. Der Host hat einen Knopf **„Desktop leeren“**.
+- **Mauszeiger:** Dein Freund sieht deinen Zeiger als ganz normalen weißen Windows-Pfeil in Standardgröße (mit kleinem Namensschild) und kann so genau verfolgen, was du tust. Es gibt dafür keine Einstellungen. Taste **M**.
+- **Zeichnen** mit **Bleistift** (dünn), **Filzstift** (kräftig) oder **Marker** (breit, durchscheinend); **beliebige Farbe** (10 Vorgaben plus Farbwähler) und **Dicke** per Regler (Farbe und Dicke gelten für beide Modi). Zwei Modi: *verblasst* (Taste **P**) und *bleibt* (Taste **O**). **C** löscht deine Zeichnungen. Der Host hat einen Knopf **„Desktop leeren“**.
+- **Bilder:** Lege ein Bild (z. B. ein Meme) auf den Bildschirm des Streamers: Knopf in der Leiste, **Strg+V** (Bild aus der Zwischenablage) oder Drag & Drop (Taste **B**). Du kannst es **verschieben**, an den Ecken **skalieren**, am Punkt oben **drehen** (Umschalt = 15°-Schritte) und mit gedrückter **Alt-Taste ziehen, um zuzuschneiden**. Mausrad ändert die Größe, *Zuschnitt zurücksetzen* und *Entfernen* gibt es im Panel. Der Streamer sieht das Bild sofort auf seinem Desktop (es ist auch im Stream). Höchstens 8 Bilder je Zuschauer, jedes wird auf 1600 px verkleinert.
 
 **Sonstiges**
 - Automatischer Hintergrund-Updater (Banner erscheint nur, wenn gerade nicht gestreamt/zugesehen wird).
@@ -92,7 +97,7 @@ Das Passwort ändert sich per Knopfdruck (↻) jederzeit; die ID bleibt gleich. 
 | Bedrohung | Schutz |
 |---|---|
 | Offene Ports zu Hause | Gibt es nicht; alle Verbindungen sind ausgehend. |
-| ID raten / Passwort durchprobieren | 9-stellige ID, zufälliges 10-Zeichen-Passwort (≈ 50 Bit), Rate-Limit am Server, teure Schlüsselableitung (PBKDF2) und automatische Passwort-Erneuerung nach 5 Fehlversuchen. |
+| ID raten / Passwort durchprobieren | 9-stellige ID, zufälliges 10-Zeichen-Passwort (≈ 50 Bit) bzw. dein eigenes (mindestens 10 Zeichen – wähle es lang), Rate-Limit am Server, teure Schlüsselableitung (PBKDF2) und 10 Minuten Sperre nach 5 Fehlversuchen. |
 | Mitlesen / Manipulieren durch den VPS | Passwort wird nie gesendet (Challenge/Response, gegenseitig), SDP/ICE sind per HMAC gesichert, Medien laufen DTLS-SRTP. |
 | TURN als Sprungbrett ins Netz des VPS | coturn verbietet private/lokale Zielbereiche. |
 | Fremder Zugriff auf deinen PC | Fernsteuerung nur nach ausdrücklichem „Ja“, jederzeit F12 oder „Sofort beenden“. |

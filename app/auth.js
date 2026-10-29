@@ -9,8 +9,9 @@
  *  - a session key derived from both nonces authenticates the WebRTC SDP, so the server (or anyone on the
  *    path) cannot swap the DTLS fingerprints and read or alter the stream
  *
- * Passwords have 10 characters from a 32-letter alphabet (50 bits) – together with PBKDF2 this makes
- * offline guessing from a recorded handshake impractical.
+ * Generated passwords have 10 characters from a 32-letter alphabet (50 bits) – together with PBKDF2 this makes
+ * offline guessing from a recorded handshake impractical. A streamer may pick his own (10-64 characters);
+ * its strength is then up to him.
  */
 
 (function (root, factory) {
@@ -51,12 +52,30 @@
     return s;
   }
 
-  /** Accepts input as typed: lowercase, spaces, dashes. Returns the canonical 10 characters or ''. */
+  const MIN_CUSTOM = 10;
+  const MAX_CUSTOM = 64;
+
+  /**
+   * Canonical form of a password, identical on both sides.
+   *  - generated style ("K7M2Q-X9P4T", typed in any case, with spaces or dashes) -> the 10 plain characters
+   *  - a password the streamer chose himself (10-64 characters) -> exactly as typed (only trimmed)
+   * Returns '' when the input cannot be a password.
+   */
   function normalizePassword(input) {
-    const s = String(input || '').toUpperCase().replace(/[^A-Z0-9]/g, '');
-    if (s.length !== 10) return '';
-    for (const ch of s) if (!ALPHABET.includes(ch)) return '';
-    return s;
+    const raw = String(input || '').trim();
+    const compact = raw.toUpperCase().replace(/[\s-]/g, '');
+    if (compact.length === 10 && [...compact].every((ch) => ALPHABET.includes(ch))) return compact;
+    return raw.length >= MIN_CUSTOM && raw.length <= MAX_CUSTOM ? raw : '';
+  }
+
+  /** Why a self-chosen password is not acceptable ('' = fine). */
+  function customPasswordProblem(input) {
+    const raw = String(input || '').trim();
+    if (raw.length < MIN_CUSTOM) return `Mindestens ${MIN_CUSTOM} Zeichen.`;
+    if (raw.length > MAX_CUSTOM) return `Höchstens ${MAX_CUSTOM} Zeichen.`;
+    if (new Set(raw).size < 5) return 'Zu einfach – nutze mehr verschiedene Zeichen.';
+    if (/^\d+$/.test(raw)) return 'Nur Ziffern sind zu leicht zu erraten.';
+    return '';
   }
 
   function formatId(id) {
@@ -105,6 +124,7 @@
     randomBytes,
     generatePassword,
     normalizePassword,
+    customPasswordProblem,
     formatId,
     normalizeId,
     deriveKey,
