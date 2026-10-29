@@ -285,13 +285,14 @@
       </label>
       <fieldset class="update-box">
         <legend>Updates</legend>
-        <label>Update-URL (https)
-          <input id="setUpdateUrl" type="text" placeholder="leer = https://&lt;Server&gt;/updates  ·  github:besitzer/repo" spellcheck="false" />
-          <small id="setUpdateDerived" class="field-state"></small>
-        </label>
-        <label class="inline-check"><input id="setAutoUpdate" type="checkbox" checked /> Automatisch im Hintergrund nach Updates suchen</label>
+        <div class="update-grid">
+          <span class="k">Installierte Version</span><span id="updVersion" class="v"></span>
+          <span class="k">Zuletzt geprüft</span><span id="updLast" class="v"></span>
+          <span class="k">Status</span><span id="updateStatusText" class="v"></span>
+        </div>
+        <label class="inline-check"><input id="setAutoUpdate" type="checkbox" checked /> Automatisch aktualisieren (die App startet danach von selbst neu)</label>
         <div class="update-row">
-          <span id="updateStatusText" class="hint"></span>
+          <span class="hint">Geprüft wird beim Start und danach alle 10 Minuten. Die Updates kommen von GitHub.</span>
           <button type="button" id="btnCheckUpdate" class="btn btn-secondary">Jetzt prüfen</button>
         </div>
       </fieldset>

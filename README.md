@@ -137,7 +137,7 @@ Eine neue Version veröffentlichst du mit einem Befehl:
 
 Das Skript setzt die Version, führt die Tests aus, committet, setzt das Tag `v2.0.2` und pusht. GitHub Actions ([.github/workflows/release.yml](.github/workflows/release.yml)) baut daraufhin den Installer und legt ihn mit `latest.yml` als Release ab. Wenige Minuten später laden alle installierten Apps das Update im Hintergrund und **starten sich selbst neu**, sobald nichts mehr geteilt oder angesehen wird (während eines Streams wartet die App). Nach dem Build bleiben auf GitHub nur die **neuesten zwei Versionen** erhalten, ältere Releases und ihre Tags werden automatisch gelöscht.
 
-Wer lieber einen eigenen Webserver nutzt, trägt unter *Einstellungen → Update-URL* eine `https://`-Adresse ein (dorthin gehören `latest.yml`, `.exe` und `.blockmap`, zum Beispiel `https://<deine-domain>/updates`).
+In den **Einstellungen → Updates** siehst du die installierte Version, wann zuletzt geprüft wurde und ob ein Update bereitsteht. Dort schaltest du auch „Automatisch aktualisieren“ an oder aus und kannst jederzeit „Jetzt prüfen“ klicken. Geprüft wird beim Start und danach alle 10 Minuten. Eine Update-Adresse muss man nicht eintragen.
 
 ### Server testen
 

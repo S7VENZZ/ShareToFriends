@@ -64,7 +64,7 @@ function loadSettings() {
     id: /^\d{9}$/.test(raw.id) ? raw.id : newId(),
     serverUrl: typeof raw.serverUrl === 'string' ? raw.serverUrl : '',
     displayName: typeof raw.displayName === 'string' ? raw.displayName : '',
-    updateUrl: typeof raw.updateUrl === 'string' ? raw.updateUrl : '',
+    updateUrl: '', // no longer a setting: updates always come from the GitHub releases (older versions stored one)
     autoUpdate: raw.autoUpdate !== false,
     prefs: raw.prefs && typeof raw.prefs === 'object' ? raw.prefs : {},
   };
@@ -94,9 +94,9 @@ function cleanServerUrl(value) {
   return url.toString();
 }
 
-/** Update feed used when none is set: the signaling server's own /updates path. */
-function effectiveUpdateUrl(settings) {
-  return settings.updateUrl || normalizeUpdateUrl(DEFAULT_UPDATE_SOURCE);
+/** Updates come from the GitHub releases of the project (STF_UPDATE_URL only exists for local testing). */
+function effectiveUpdateUrl() {
+  return normalizeUpdateUrl(process.env.STF_UPDATE_URL || DEFAULT_UPDATE_SOURCE);
 }
 
 function publicSettings(settings) {
@@ -111,7 +111,7 @@ function saveSettings(input) {
     serverUrl: cleanServerUrl(input.serverUrl),
     // eslint-disable-next-line no-control-regex
     displayName: String(input.displayName || '').replace(/[\u0000-\u001f\u007f]/g, '').trim().slice(0, 32),
-    updateUrl: normalizeUpdateUrl(input.updateUrl),
+    updateUrl: '',
     autoUpdate: input.autoUpdate !== false,
   };
   writeSettings(next);
@@ -290,7 +290,7 @@ function registerIpc() {
     const saved = saveSettings(input);
     if (updater) {
       updater.start();
-      updater.check(false);
+      if (saved.autoUpdate !== false) updater.check(false);
     }
     return saved;
   });

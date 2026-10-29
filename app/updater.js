@@ -18,8 +18,8 @@ const { normalizeUpdateUrl } = require('./update-url');
 /** @type {import('electron-updater').AppUpdater} */
 let autoUpdater = null;
 
-const FIRST_CHECK_DELAY_MS = 8_000;
-const CHECK_INTERVAL_MS = 4 * 60 * 60 * 1000;
+const FIRST_CHECK_DELAY_MS = 5_000; // right after the start
+const CHECK_INTERVAL_MS = 10 * 60 * 1000; // and every 10 minutes while the app is open
 class Updater {
   /**
    * @param {{ getWindow: () => Electron.BrowserWindow | null,
@@ -28,7 +28,8 @@ class Updater {
   constructor({ getWindow, getConfig }) {
     this.getWindow = getWindow;
     this.getConfig = getConfig;
-    this.status = { state: 'idle', currentVersion: app.getVersion() };
+    this.status = { state: 'idle', currentVersion: app.getVersion(), lastChecked: null };
+    this.lastChecked = null; // when the feed was last read successfully (ms since epoch)
     this.timer = null;
     this.checking = false;
     this.configured = false;
@@ -44,10 +45,14 @@ class Updater {
     if (process.env.STF_FORCE_DEV_UPDATE === '1') autoUpdater.forceDevUpdateConfig = true;
 
     autoUpdater.on('checking-for-update', () => this._set({ state: 'checking' }));
-    autoUpdater.on('update-available', (info) =>
-      this._set({ state: 'available', version: info.version, notes: this._notes(info) })
-    );
-    autoUpdater.on('update-not-available', () => this._set({ state: 'none' }));
+    autoUpdater.on('update-available', (info) => {
+      this.lastChecked = Date.now();
+      this._set({ state: 'available', version: info.version, notes: this._notes(info) });
+    });
+    autoUpdater.on('update-not-available', () => {
+      this.lastChecked = Date.now();
+      this._set({ state: 'none' });
+    });
     autoUpdater.on('download-progress', (p) =>
       this._set({
         state: 'downloading',
@@ -69,7 +74,7 @@ class Updater {
   }
 
   _set(patch) {
-    const keep = { currentVersion: app.getVersion() };
+    const keep = { currentVersion: app.getVersion(), lastChecked: this.lastChecked };
     if (patch.state === 'downloading' || patch.state === 'available' || patch.state === 'downloaded') {
       keep.version = this.status.version;
       keep.notes = this.status.notes;

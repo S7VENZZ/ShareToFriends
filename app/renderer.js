@@ -2330,11 +2330,11 @@
       case 'checking': return 'Suche nach Updates …';
       case 'available': return `Version ${u.version} gefunden – wird geladen …`;
       case 'downloading': return `Update wird geladen … ${u.percent || 0} %`;
-      case 'downloaded': return `Version ${u.version} ist bereit zur Installation.`;
-      case 'none': return `Du hast die neueste Version (${u.currentVersion}).`;
+      case 'downloaded': return state.settings && state.settings.autoUpdate === false ? `Version ${u.version} ist bereit – starte die App neu, um sie zu installieren.` : `Version ${u.version} ist bereit – die App startet gleich von selbst neu.`;
+      case 'none': return 'Du hast die neueste Version.';
       case 'error': return `Update-Fehler: ${u.message || 'unbekannt'}`;
       case 'disabled': return u.message || 'Updates sind deaktiviert.';
-      default: return `Installierte Version: ${u.currentVersion}`;
+      default: return u.lastChecked ? 'Du hast die neueste Version.' : 'Noch nicht geprüft.';
     }
   }
 
@@ -2370,7 +2370,7 @@
   function renderUpdate(u) {
     const prev = updateUi.status.state;
     updateUi.status = u;
-    $('updateStatusText').textContent = updateText(u);
+    refreshUpdateInfo();
     refreshUpdateBanner();
     maybeAutoInstall();
     if (u.state === 'downloaded' && prev !== 'downloaded' && isBusy()) toast('Ein Update ist bereit. Die App startet von selbst neu, sobald du nichts mehr teilst oder ansiehst.', 'ok', 6000);
@@ -2381,24 +2381,25 @@
   /* ================================================================== */
 
   function settingsForm() {
-    return { displayName: $('setName').value, serverUrl: $('setServer').value, updateUrl: $('setUpdateUrl').value, autoUpdate: $('setAutoUpdate').checked };
+    return { displayName: $('setName').value, serverUrl: $('setServer').value, autoUpdate: $('setAutoUpdate').checked };
   }
 
-  function derivedHint() {
-    const s = state.settings;
-    $('setUpdateDerived').textContent = s.updateUrl ? '' : `Standard: GitHub-Releases (${s.derivedUpdateUrl})`;
+  /** Version, last check and status in the settings (also re-read while the dialog is open, so "vor 3 Min." stays true). */
+  function refreshUpdateInfo() {
+    const u = updateUi.status;
+    $('updVersion').textContent = u.currentVersion || (state.info && state.info.version) || '';
+    $('updLast').textContent = u.lastChecked ? timeAgo(u.lastChecked) : 'noch nicht';
+    $('updateStatusText').textContent = updateText(u);
   }
 
   function openSettings() {
     const s = state.settings;
     $('setName').value = s.displayName;
     $('setServer').value = s.serverUrl;
-    $('setUpdateUrl').value = s.updateUrl || '';
     $('setAutoUpdate').checked = s.autoUpdate !== false;
     $('settingsError').classList.add('hidden');
-    $('updateStatusText').textContent = updateText(updateUi.status);
+    refreshUpdateInfo();
     $('appVersion').textContent = state.info ? `Version ${state.info.version} · ID ${A.formatId(state.myId)}` : '';
-    derivedHint();
     $('settingsDialog').showModal();
   }
 
@@ -2430,16 +2431,19 @@
       updateUi.dismissed = updateUi.status.version || '';
       refreshUpdateBanner();
     });
-    $('btnCheckUpdate').addEventListener('click', async () => {
+    $('btnCheckUpdate').addEventListener('click', () => stf.updaterCheck());
+    // the switch takes effect right away (it only changes the update behaviour, not the other fields of the form)
+    $('setAutoUpdate').addEventListener('change', async () => {
       try {
-        state.settings = await stf.saveSettings(settingsForm());
-        derivedHint();
+        const s = state.settings;
+        state.settings = await stf.saveSettings({ displayName: s.displayName, serverUrl: s.serverUrl, autoUpdate: $('setAutoUpdate').checked });
+        toast($('setAutoUpdate').checked ? 'Automatische Updates sind an.' : 'Automatische Updates sind aus – du kannst jederzeit „Jetzt prüfen“ klicken.', 'ok', 3500);
       } catch (err) {
-        $('updateStatusText').textContent = errText(err);
-        return;
+        $('setAutoUpdate').checked = !$('setAutoUpdate').checked;
+        toast(errText(err), 'error');
       }
-      stf.updaterCheck();
     });
+    setInterval(() => $('settingsDialog').open && refreshUpdateInfo(), 20_000);
   }
 
   async function init() {

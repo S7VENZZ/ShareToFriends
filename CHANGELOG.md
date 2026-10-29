@@ -1,5 +1,9 @@
 # Changelog
 
+## Unreleased
+
+- **Update-Einstellungen vereinfacht:** Keine Update-Adresse mehr zum Eintragen, die App nutzt automatisch die GitHub-Releases. Die Einstellungen zeigen Version, „Zuletzt geprüft“ und Status; „Automatisch aktualisieren“ lässt sich an- und ausschalten. Geprüft wird beim Start und danach alle 10 Minuten.
+
 ## 2.0.4
 
 - **Zuschauer entfernen:** Der Knopf in der Zuschauerliste wirft jemanden wirklich raus. Er wird informiert, verbindet sich nicht mehr von selbst und wird 30 Minuten lang abgewiesen, wenn er es von Hand versucht.
