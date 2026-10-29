@@ -69,7 +69,7 @@
   const errText = (err) => String((err && err.message) || err).replace(/^Error invoking remote method '[^']+': (Error: )?/, '');
 
   function isBusy() {
-    return host.peers.size > 0 || Boolean(viewer.peer && viewer.peer.connected);
+    return [...host.peers.values()].some((p) => p.pc) || Boolean(viewer.peer && (viewer.peer.connected || viewer.peer.joined));
   }
 
   /* ================================================================== */
@@ -92,10 +92,11 @@
     let text;
     if (host.active) {
       chip.classList.add('live');
-      text = host.peers.size === 0 ? 'Du teilst – wartet auf Zuschauer' : `Du teilst – ${host.peers.size} ${host.peers.size === 1 ? 'Zuschauer' : 'Zuschauer'}`;
+      text = host.peers.size === 0 ? 'Du teilst – wartet auf Zuschauer' : `Du teilst – ${host.peers.size} Zuschauer`;
     } else if (state.sig && state.sig.ready) {
       chip.classList.add('ready');
-      text = 'Bereit – Freunde können sich nach dem Teilen verbinden';
+      const waiting = [...host.peers.values()].filter((p) => p.authed).length;
+      text = waiting ? `Bereit – ${waiting} ${waiting === 1 ? 'Freund wartet' : 'Freunde warten'} im Warteraum` : 'Bereit – Freunde können sich schon vorab verbinden';
     } else {
       text = 'Nicht mit dem Server verbunden';
     }
@@ -543,7 +544,8 @@
     const byName = new Map();
     for (const a of apps.list) {
       const key = a.name.toLowerCase();
-      const cur = byName.get(key) || { key, name: a.name, title: a.title, active: false, peak: 0 };
+      const cur = byName.get(key) || { key, name: a.name, title: a.title, active: false, peak: 0, otherDevice: '' };
+      if (a.onDefault === false && !cur.otherDevice) cur.otherDevice = a.deviceName || 'anderes Gerät';
       cur.active = cur.active || a.active;
       cur.peak = Math.max(cur.peak, a.peak);
       if (a.title) cur.title = a.title;
@@ -580,11 +582,22 @@
       rows.delete(info.key);
       row.querySelector('input').checked = apps.names.has(info.key);
       row.querySelector('input').title = apps.mode === 'exclude' ? 'Angehakt = stumm' : 'Angehakt = wird übertragen';
-      row.querySelector('.app-name').textContent = info.title ? `${info.name} – ${info.title}` : info.name + (info.missing ? ' (nicht aktiv)' : '');
+      row.querySelector('.app-name').textContent = (info.title ? `${info.name} – ${info.title}` : info.name + (info.missing ? ' (nicht aktiv)' : '')) + (info.otherDevice ? '  ⚠' : '');
+      row.title = info.otherDevice ? `Spielt auf „${info.otherDevice}“, nicht auf dem Windows-Standardgerät – der Ton kann von dort nicht abgegriffen werden.` : '';
       row.classList.toggle('active', info.active || info.peak > 0.001);
       row.classList.toggle('idle', !info.active && !(info.peak > 0.001));
     }
     for (const stale of rows.values()) stale.remove();
+    {
+      // apps that would be transmitted but play on a device Windows cannot capture from
+      const wanted = new Set(wantedApps().map((x) => x.name.toLowerCase()));
+      const bad = [...byName.values()].filter((i) => i.otherDevice && wanted.has(i.key));
+      const warn = $('appWarn');
+      warn.classList.toggle('hidden', bad.length === 0);
+      if (bad.length) {
+        warn.textContent = `${bad.map((i) => i.name).join(', ')} spielt auf „${bad[0].otherDevice}“ und nicht auf dem Windows-Standardgerät. Von dort kann Windows keinen Ton abgreifen. Lösung: Windows → Einstellungen → System → Ton → Lautstärkemixer → bei der App als Ausgabegerät „Standard“ wählen (bei SteelSeries Sonar: die App auf den Standard-Kanal legen).`;
+      }
+    }
     if (byName.size === 0) {
       const empty = document.createElement('div');
       empty.className = 'app-empty';
@@ -709,19 +722,32 @@
     allowDraw: true,
     control: null, // { sid, name, clip }
     denyUntil: new Map(),
-    maxTier: 0, // quality ceiling chosen by the streamer (0 = automatic, as high as the line allows)
-    forceTier: null, // or one pinned tier
+    quality: { mode: 'auto', height: 1080, fps: 60 }, // chosen by the streamer: auto up to this step, or this step pinned
     lockUntil: 0, // after too many wrong passwords new logins are blocked until then
     banned: new Map(), // viewers the streamer removed: 'id:123456789' or 'name:xyz' -> until (ms)
   };
 
+  /**
+   * Screen / window capture. The classic desktop-capture API (chromeMediaSource: 'desktop') is used because
+   * getDisplayMedia() is held at about 53 FPS by Chromium (measured, whatever frame rate is asked for), while this
+   * API delivers 80 and more; the sender's maxFramerate then thins the stream to exactly 60 / 30 / 15.
+   * getDisplayMedia() stays as the fallback.
+   */
   async function captureSource(id) {
     await stf.selectSource(id);
-    const stream = await navigator.mediaDevices.getDisplayMedia({
-      video: { width: { ideal: 1920 }, height: { ideal: 1080 }, frameRate: { ideal: 60, max: 60 } },
-      // raw system audio: voice processing would strip game and music sound
-      audio: { echoCancellation: false, noiseSuppression: false, autoGainControl: false, channelCount: 2 },
-    });
+    let stream;
+    try {
+      stream = await navigator.mediaDevices.getUserMedia({
+        audio: { mandatory: { chromeMediaSource: 'desktop' } }, // raw system sound (loopback), no voice processing
+        video: { mandatory: { chromeMediaSource: 'desktop', chromeMediaSourceId: id, minFrameRate: 60, maxFrameRate: 144, maxWidth: 1920, maxHeight: 1080 } },
+      });
+    } catch (err) {
+      console.warn('desktop capture failed, falling back to getDisplayMedia:', err && err.name);
+      stream = await navigator.mediaDevices.getDisplayMedia({
+        video: { width: { ideal: 1920 }, height: { ideal: 1080 }, frameRate: { ideal: 60, max: 60 } },
+        audio: { echoCancellation: false, noiseSuppression: false, autoGainControl: false, channelCount: 2 },
+      });
+    }
     const video = stream.getVideoTracks()[0];
     video.contentHint = 'motion';
     return { stream, video };
@@ -753,7 +779,11 @@
       host.tickTimer = setInterval(hostTick, 1000);
       pollApps();
       reconcileApps();
-      toast('Du teilst jetzt. Gib deinen Freunden ID und Passwort.', 'ok');
+      for (const p of host.peers.values()) {
+        if (p.authed && p.waiting && !p.closed) p.startRtc().catch((err) => console.warn('could not start the stream for', p.name, err));
+      }
+      renderViewerList();
+      toast(host.peers.size ? 'Du teilst jetzt – wartende Zuschauer sehen den Stream sofort.' : 'Du teilst jetzt. Gib deinen Freunden ID und Passwort.', 'ok');
     } catch (err) {
       toast(`Teilen fehlgeschlagen: ${errText(err)}`, 'error', 8000);
       await stopSharing(false);
@@ -797,8 +827,11 @@
     host.active = false;
     clearInterval(host.tickTimer);
     await stf.remoteEnd('Teilen beendet');
-    for (const p of [...host.peers.values()]) p.close('stopped', notify);
-    host.peers.clear();
+    for (const p of [...host.peers.values()]) {
+      if (p.authed && notify) p.pause(); // back to the waiting room, no reconnect needed when sharing starts again
+      else p.close('stopped', notify);
+    }
+    for (const [sid, p] of [...host.peers]) if (p.closed) host.peers.delete(sid);
     if (host.video) host.video.removeEventListener('ended', onCaptureEnded);
     host.capture && host.capture.getTracks().forEach((t) => t.stop());
     host.capture = null;
@@ -820,11 +853,7 @@
   }
 
   function onIncoming(sid) {
-    if (!host.active || !host.out) {
-      state.sig.relay(sid, { k: 'refuse', reason: 'not-sharing' });
-      state.sig.bye(sid);
-      return;
-    }
+    // Not sharing yet is fine: the viewer waits in the room and gets the stream as soon as it starts.
     if (Date.now() < host.lockUntil) {
       state.sig.relay(sid, { k: 'refuse', reason: 'rate-limit' });
       state.sig.bye(sid);
@@ -836,11 +865,12 @@
       hostId: state.myId,
       getBaseKey: () => host.baseKey,
       getIce: () => state.ice,
+      hostName: () => state.settings.displayName || 'Host',
       getMedia: () => (host.active ? { stream: host.out, video: host.video, audio: host.mixer && host.mixer.track, height: host.height } : null),
       hooks: {
         onAuthOk: (p) => {
           host.peers.set(p.sid, p);
-          toast(`${p.name} schaut jetzt zu.`, 'ok', 3000);
+          toast(host.active ? `${p.name} schaut jetzt zu.` : `${p.name} wartet im Warteraum – der Stream erscheint, sobald du teilst.`, 'ok', 3500);
           renderViewerList();
           renderHostChip();
           refreshUpdateBanner();
@@ -864,8 +894,7 @@
         },
       },
     });
-    peer.hostMaxTier = host.maxTier;
-    peer.hostForceTier = host.forceTier;
+    applyQualityToPeer(peer);
     host.peers.set(sid, peer); // routing needs it during the handshake; removed again if auth fails
     peer.start();
     // a handshake that never completes frees its slot
@@ -899,7 +928,8 @@
   /** Removes a viewer for good (for a while): he is told, does not reconnect by himself and is refused if he tries. */
   function kickViewer(p) {
     host.banned.set(banKey(p), Date.now() + KICK_BAN_MS);
-    p.sendCtl({ t: 'kick' });
+    if (p.ctl) p.sendCtl({ t: 'kick' });
+    else p.sig.relay(p.sid, { k: 'kicked' });
     toast(`${p.name} wurde entfernt und kann sich 30 Minuten lang nicht wieder verbinden.`, 'ok', 5000);
     setTimeout(() => p.close('kicked'), 400); // let the message go out first
   }
@@ -924,7 +954,7 @@
       const sub = document.createElement('div');
       sub.className = 'sub';
       sub.dataset.sid = p.sid;
-      sub.textContent = 'verbindet …';
+      sub.textContent = p.pc ? 'verbindet …' : 'wartet auf deinen Stream';
       meta.append(name, sub);
       const kick = document.createElement('button');
       kick.className = 'icon-btn';
@@ -936,24 +966,32 @@
     }
   }
 
-  /** Streamer quality: "0".."4" = automatic with a ceiling, "f0".."f2" = pinned tier (no ping guard). */
-  function applyHostQuality(value, announce) {
-    const pinned = typeof value === 'string' && value.startsWith('f');
-    const idx = clamp(Math.round(Number(pinned ? value.slice(1) : value) || 0), 0, AD.TIERS.length - 1);
-    host.maxTier = pinned ? 0 : idx;
-    host.forceTier = pinned ? idx : null;
-    setPref('hostQuality', pinned ? `f${idx}` : String(idx));
-    $('selHostQuality').value = pinned ? `f${idx}` : String(idx);
-    for (const p of host.peers.values()) {
-      p.hostMaxTier = host.maxTier;
-      p.hostForceTier = host.forceTier;
-    }
+  const PRESET_RE = /^(1080|720|540|360)x(60|30|15)$/;
+
+  function parsePreset(key, fallback = { height: 1080, fps: 60 }) {
+    const m = PRESET_RE.exec(String(key));
+    return m ? { height: Number(m[1]), fps: Number(m[2]) } : fallback;
+  }
+
+  function applyQualityToPeer(p) {
+    const q = host.quality;
+    p.hostMaxHeight = q.mode === 'auto' ? q.height : 1080;
+    p.hostMaxFps = q.mode === 'auto' ? q.fps : 60;
+    p.hostForce = q.mode === 'fixed' ? { height: q.height, fps: q.fps } : null;
+  }
+
+  /** Streamer quality: "auto" = automatic up to the chosen step, "fixed" = that step is held (no ping guard). */
+  function applyHostQuality(mode, presetKey, announce) {
+    const preset = parsePreset(presetKey);
+    host.quality = { mode: mode === 'fixed' ? 'fixed' : 'auto', height: preset.height, fps: preset.fps };
+    setPref('hostMode', host.quality.mode);
+    setPref('hostPreset', `${preset.height}x${preset.fps}`);
+    $('selHostMode').value = host.quality.mode;
+    $('selHostPreset').value = `${preset.height}x${preset.fps}`;
+    for (const p of host.peers.values()) applyQualityToPeer(p);
     if (announce) {
-      toast(
-        pinned ? `Feste Qualität: ${AD.TIERS[idx].name} – ohne Ping-Schutz` : idx ? `Maximale Qualität: ${AD.TIERS[idx].name}` : 'Qualität: automatisch (so hoch wie deine Leitung erlaubt)',
-        'ok',
-        3500
-      );
+      const name = `${preset.height}p ${preset.fps} FPS`;
+      toast(host.quality.mode === 'fixed' ? `Feste Qualität: ${name} – ohne Ping-Schutz` : `Automatische Qualität, höchstens ${name}`, 'ok', 3500);
     }
   }
 
@@ -961,6 +999,10 @@
   async function hostTick() {
     if (!host.active) return;
     for (const p of host.peers.values()) {
+      if (p.authed && !p.pc) {
+        const waitingSub = document.querySelector(`.viewer-row .sub[data-sid="${p.sid}"]`);
+        if (waitingSub) waitingSub.textContent = 'wartet auf deinen Stream';
+      }
       if (!p.authed || !p.pc) continue;
       try {
         await p.tick(host.height);
@@ -981,7 +1023,8 @@
     if (msg.d === 1) return onHostDraw(peer, msg);
     switch (msg.t) {
       case 'pref':
-        peer.viewerMaxTier = clamp(Math.round(Number(msg.maxTier) || 0), 0, AD.TIERS.length - 1);
+        peer.viewerMaxHeight = [1080, 720, 540, 360].includes(msg.maxHeight) ? msg.maxHeight : 1080;
+        peer.viewerMaxFps = [60, 30, 15].includes(msg.maxFps) ? msg.maxFps : 60;
         break;
       case 'req':
         handleControlRequest(peer).catch((err) => console.error('control request failed', err));
@@ -1077,9 +1120,9 @@
   function bindHost() {
     $('btnStopShare').addEventListener('click', () => stopSharing());
     $('btnClearAll').addEventListener('click', () => stf.drawEvent({ k: 'clearall', id: 'host' }));
-    $('selHostQuality').addEventListener('change', () => {
-      applyHostQuality($('selHostQuality').value, true);
-    });
+    const onHostQuality = () => applyHostQuality($('selHostMode').value, $('selHostPreset').value, true);
+    $('selHostMode').addEventListener('change', onHostQuality);
+    $('selHostPreset').addEventListener('change', onHostQuality);
     $('chkAllowDraw').addEventListener('change', (e) => {
       host.allowDraw = e.target.checked;
       setPref('allowDraw', host.allowDraw);
@@ -1104,9 +1147,9 @@
     creds: null, // { hostId, password } kept in memory for automatic reconnects
     connecting: false,
     leaving: false,
+    waiting: false, // signed in, but the streamer is not sharing yet
     reconnecting: false,
     info: { name: '', allowDraw: true },
-    zoom: 'fit',
     statsTimer: null,
     prevStats: null,
     barTimer: null,
@@ -1171,6 +1214,8 @@
         onFast: onViewerMessage,
         onState: () => {},
         onClosed: (p, reason) => onViewerClosed(p, reason),
+        onLive: () => onViewerLive(),
+        onWaiting: () => onViewerWaiting(),
       },
     });
     viewer.peer = peer;
@@ -1178,16 +1223,13 @@
       await peer.connect();
       viewer.connecting = false;
       viewer.reconnecting = false;
-      $('viewerBusy').classList.add('gone');
       $('connectError').classList.add('hidden');
       $('userSub').textContent = 'Online';
+      if (peer.hostName) viewer.info.name = peer.hostName;
       rememberFriend(viewer.creds.hostId, viewer.creds.password, viewer.info.name || '');
       renderFriends();
-      applyViewerQuality();
-      startViewerStats();
-      showBar();
-      refreshUpdateBanner();
-      updateViewerTools();
+      if (peer.live) onViewerLive();
+      else onViewerWaiting();
     } catch (err) {
       viewer.connecting = false;
       const code = errText(err);
@@ -1210,6 +1252,35 @@
     }
   }
 
+  /** The stream is there (right away, or after a wait in the room). */
+  function onViewerLive() {
+    viewer.waiting = false;
+    $('viewerBusy').classList.add('gone');
+    applyViewerQuality();
+    startViewerStats();
+    showBar();
+    refreshUpdateBanner();
+    updateViewerTools();
+  }
+
+  /** Connected and signed in, but the streamer is not sharing (yet / any more): wait for it. */
+  function onViewerWaiting() {
+    viewer.waiting = true;
+    clearInterval(viewer.statsTimer);
+    endControl(null, false);
+    drawSetMode(null);
+    clearPictures();
+    resetView();
+    $('remoteVideo').srcObject = null;
+    const who = (viewer.peer && viewer.peer.hostName) || viewer.info.name || 'dein Freund';
+    $('viewerBusyText').textContent = `Im Warteraum – ${who} teilt noch nichts. Sobald der Stream startet, siehst du ihn hier.`;
+    $('viewerBusy').classList.remove('gone');
+    $('streamBar').classList.remove('idle');
+    showView('viewer');
+    refreshUpdateBanner();
+    updateViewerTools();
+  }
+
   function onViewerClosed(peer, reason) {
     if (viewer.peer !== peer) return;
     clearPictures(); // the streamer's overlay dropped them with the connection
@@ -1217,7 +1288,7 @@
     endControl(null, false);
     drawSetMode(null);
     if (viewer.leaving || !viewer.creds) return;
-    if (!peer.connected) return; // initial attempt: openViewerSession reports it
+    if (!peer.joined) return; // initial attempt: openViewerSession reports it
     viewer.peer = null;
     $('viewerBusyText').textContent = 'Verbindung unterbrochen – verbinde neu …';
     $('viewerBusy').classList.remove('gone');
@@ -1255,6 +1326,7 @@
 
   function leaveViewer() {
     viewer.leaving = true;
+    resetView();
     clearPictures();
     clearInterval(viewer.statsTimer);
     endControl(null, true);
@@ -1315,7 +1387,9 @@
   }
 
   function applyViewerQuality() {
-    if (viewer.peer) viewer.peer.sendCtl({ t: 'pref', maxTier: Number($('selQuality').value) });
+    if (!viewer.peer) return;
+    const q = $('selQuality').value === 'auto' ? { height: 1080, fps: 60 } : parsePreset($('selQuality').value);
+    viewer.peer.sendCtl({ t: 'pref', maxHeight: q.height, maxFps: q.fps });
   }
 
   function applyVolume() {
@@ -1326,15 +1400,86 @@
     $('btnMute').querySelector('use').setAttribute('href', muted ? '#i-vol-off' : '#i-vol');
   }
 
-  function setZoom(mode) {
-    viewer.zoom = mode;
-    $('viewerWrap').classList.toggle('fill', mode === 'fill');
-    $('viewerWrap').classList.toggle('native', mode === '100');
-    $('zoomFit').classList.toggle('active', mode === 'fit');
-    $('zoomFill').classList.toggle('active', mode === 'fill');
-    $('zoom100').classList.toggle('active', mode === '100');
-    setPref('zoom', mode);
-    drawResize();
+  /* ---- zoom like Discord: mouse wheel zooms at the pointer, dragging moves, turning back returns to "fit" ---- */
+
+  const view = { s: 1, tx: 0, ty: 0 }; // scale and shift (in px of the viewer area); 1 = fitted
+  const ZOOM_MAX = 8;
+
+  function clampView() {
+    view.tx = clamp(view.tx, draw.W - draw.W * view.s, 0);
+    view.ty = clamp(view.ty, draw.H - draw.H * view.s, 0);
+  }
+
+  function applyView() {
+    clampView();
+    const v = $('remoteVideo');
+    v.style.transform = view.s === 1 ? '' : `translate(${view.tx}px, ${view.ty}px) scale(${view.s})`;
+    $('viewerWrap').classList.toggle('zoomed', view.s > 1);
+    $('zoomBadge').classList.toggle('hidden', view.s === 1);
+    $('zoomBadge').textContent = `${Math.round(view.s * 100)} %  ·  zurücksetzen`;
+    drawKick(); // strokes and pictures follow the picture
+  }
+
+  function resetView() {
+    view.s = 1;
+    view.tx = 0;
+    view.ty = 0;
+    applyView();
+  }
+
+  /** Zoom by `factor`, keeping the point (cx, cy) of the viewer area where it is. */
+  function zoomAt(cx, cy, factor) {
+    const next = clamp(view.s * factor, 1, ZOOM_MAX);
+    if (next === view.s) return;
+    const k = next / view.s;
+    view.tx = cx - (cx - view.tx) * k;
+    view.ty = cy - (cy - view.ty) * k;
+    view.s = next < 1.02 ? 1 : next; // close to "fit": snap back
+    if (view.s === 1) {
+      view.tx = 0;
+      view.ty = 0;
+    }
+    applyView();
+  }
+
+  function bindZoom() {
+    const wrap = $('viewerWrap');
+    wrap.addEventListener(
+      'wheel',
+      (e) => {
+        if (ctl.engaged || e.defaultPrevented || e.target.closest('#streamBar, #drawPanel, #ctlTop, #zoomBadge')) return;
+        e.preventDefault();
+        const box = wrap.getBoundingClientRect();
+        const unit = e.deltaMode === 1 ? 33 : 1; // lines -> px
+        zoomAt(e.clientX - box.left, e.clientY - box.top, Math.pow(1.0017, -e.deltaY * unit));
+      },
+      { passive: false }
+    );
+    $('zoomBadge').addEventListener('click', resetView);
+    let pan = null;
+    wrap.addEventListener('pointerdown', (e) => {
+      if (view.s === 1 || ctl.engaged || e.target.closest('#streamBar, #drawPanel, #ctlTop, #zoomBadge')) return;
+      const middle = e.button === 1;
+      if (!middle && (e.button !== 0 || draw.mode)) return;
+      pan = { x: e.clientX, y: e.clientY, tx: view.tx, ty: view.ty, id: e.pointerId };
+      wrap.setPointerCapture(e.pointerId);
+      wrap.classList.add('panning');
+      e.preventDefault();
+    });
+    wrap.addEventListener('pointermove', (e) => {
+      if (!pan || e.pointerId !== pan.id) return;
+      view.tx = pan.tx + (e.clientX - pan.x);
+      view.ty = pan.ty + (e.clientY - pan.y);
+      applyView();
+    });
+    const stop = (e) => {
+      if (!pan || e.pointerId !== pan.id) return;
+      pan = null;
+      wrap.classList.remove('panning');
+    };
+    wrap.addEventListener('pointerup', stop);
+    wrap.addEventListener('pointercancel', stop);
+    new ResizeObserver(() => applyView()).observe(wrap);
   }
 
   let hintTimer = null;
@@ -1352,7 +1497,7 @@
     $('streamBar').classList.remove('idle');
     clearTimeout(viewer.barTimer);
     viewer.barTimer = setTimeout(() => {
-      if (!viewer.barHover && !ctl.engaged && !draw.mode) $('streamBar').classList.add('idle');
+      if (!viewer.barHover && !ctl.engaged && !draw.mode && !viewer.waiting) $('streamBar').classList.add('idle');
     }, 2800);
   }
 
@@ -1382,9 +1527,7 @@
       $('btnMute').setAttribute('aria-pressed', String($('btnMute').getAttribute('aria-pressed') !== 'true'));
       applyVolume();
     });
-    $('zoomFit').addEventListener('click', () => setZoom('fit'));
-    $('zoomFill').addEventListener('click', () => setZoom('fill'));
-    $('zoom100').addEventListener('click', () => setZoom('100'));
+    bindZoom();
     $('selQuality').addEventListener('change', () => {
       setPref('quality', $('selQuality').value);
       applyViewerQuality();
@@ -1470,7 +1613,7 @@
     $('viewerWrap').classList.toggle('pointing', mode === 'cursor');
     renderDrawPanel();
     showBar(); // keyboard shortcuts must reveal the bar and panel too
-    if (mode) showHint(mode === 'image' ? 'Bild – ziehen, Ecken skalieren, oben drehen, Alt + ziehen zuschneiden' : mode === 'cursor' ? 'Mauszeiger – dein Freund sieht jede Bewegung' : mode === 'temp' ? 'Zeichnen (verblasst) – Maustaste gedrückt halten' : 'Zeichnen (bleibt) – mit dem Papierkorb löschen', 3000);
+    if (mode) showHint(mode === 'image' ? 'Bild – ziehen, Ecken skalieren, oben drehen, Alt + Ecke/Kante ziehen zuschneiden' : mode === 'cursor' ? 'Mauszeiger – dein Freund sieht jede Bewegung' : mode === 'temp' ? 'Zeichnen (verblasst) – Maustaste gedrückt halten' : 'Zeichnen (bleibt) – mit dem Papierkorb löschen', 3000);
   }
 
   function sendDraw(msg) {
@@ -1549,10 +1692,10 @@
   function contentRect() {
     const v = $('remoteVideo');
     if (!v.videoWidth || !draw.W) return null;
-    const scale = viewer.zoom === 'fill' ? Math.max(draw.W / v.videoWidth, draw.H / v.videoHeight) : Math.min(draw.W / v.videoWidth, draw.H / v.videoHeight);
+    const scale = Math.min(draw.W / v.videoWidth, draw.H / v.videoHeight); // fitted, then zoomed / shifted
     const w = v.videoWidth * scale;
     const h = v.videoHeight * scale;
-    return { x: (draw.W - w) / 2, y: (draw.H - h) / 2, w, h };
+    return { x: view.tx + ((draw.W - w) / 2) * view.s, y: view.ty + ((draw.H - h) / 2) * view.s, w: w * view.s, h: h * view.s };
   }
 
   function normalizedPoint(e) {
@@ -1630,11 +1773,12 @@
 
   /* ---- pictures on the streamer's screen ---- */
 
-  const pics = { list: [], sel: null, drag: null, seq: 0, pendingId: null, sendTimer: 0 };
+  const pics = { list: [], sel: null, drag: null, seq: 0, pendingId: null, sendTimer: 0, alt: false };
   const PIC_MAX_DIM = 1600;
   const PIC_MAX_BYTES = 3_500_000;
   const PIC_MAX_COUNT = 8;
   const HANDLE_R = 11;
+  const EDGE_R = 9; // grab zone around the border for cropping (Alt)
   const ROT_OFFSET = 30;
 
   const picById = (id) => pics.list.find((p) => p.id === id);
@@ -1755,8 +1899,19 @@
       const l = Style.toImageSpace(g, pt.x, pt.y);
       if (Math.hypot(l.lx, l.ly + g.ph / 2 + ROT_OFFSET) < HANDLE_R + 3) return { pic: sel, part: 'rot' };
       for (const [sx, sy] of [[-1, -1], [1, -1], [1, 1], [-1, 1]]) {
-        if (Math.hypot(l.lx - (sx * g.pw) / 2, l.ly - (sy * g.ph) / 2) < HANDLE_R + 3) return { pic: sel, part: 'corner' };
+        if (Math.hypot(l.lx - (sx * g.pw) / 2, l.ly - (sy * g.ph) / 2) < HANDLE_R + 3) {
+          return { pic: sel, part: 'corner', sides: { l: sx < 0, r: sx > 0, t: sy < 0, b: sy > 0 } };
+        }
       }
+      // along the border: crop one side
+      const inside = Math.abs(l.lx) <= g.pw / 2 + EDGE_R && Math.abs(l.ly) <= g.ph / 2 + EDGE_R;
+      const sides = {
+        l: Math.abs(l.lx + g.pw / 2) < EDGE_R,
+        r: Math.abs(l.lx - g.pw / 2) < EDGE_R,
+        t: Math.abs(l.ly + g.ph / 2) < EDGE_R,
+        b: Math.abs(l.ly - g.ph / 2) < EDGE_R,
+      };
+      if (inside && (sides.l || sides.r || sides.t || sides.b)) return { pic: sel, part: 'edge', sides };
     }
     for (let i = pics.list.length - 1; i >= 0; i--) {
       const p = pics.list[i];
@@ -1784,7 +1939,10 @@
     pics.list.splice(pics.list.indexOf(p), 1);
     pics.list.push(p);
     const g = picGeometry(p, pt.rect);
-    if (hit.part === 'body' && e.altKey) {
+    if (e.altKey && (hit.part === 'corner' || hit.part === 'edge')) {
+      // Alt + drag a corner or an edge: crop freely (moving outwards takes the crop back)
+      pics.drag = { type: 'cropEdge', id: p.id, sides: hit.sides, t0: { ...p.t }, g0: g };
+    } else if (hit.part === 'body' && e.altKey) {
       const l = Style.toImageSpace(g, pt.x, pt.y);
       pics.drag = { type: 'crop', id: p.id, u0: l.u, v0: l.v, u1: l.u, v1: l.v };
     } else if (hit.part === 'rot') {
@@ -1792,6 +1950,7 @@
     } else if (hit.part === 'corner') {
       pics.drag = { type: 'scale', id: p.id, d0: Math.max(10, Math.hypot(pt.x - g.cx, pt.y - g.cy)), w0: p.t.w };
     } else {
+      // a plain drag on the body or on a border (without Alt) moves the picture
       pics.drag = { type: 'move', id: p.id, ox: g.cx - pt.x, oy: g.cy - pt.y };
     }
     drawKick();
@@ -1800,10 +1959,23 @@
   function picPointerMove(e) {
     const pt = picPointer(e);
     if (!pt) return;
+    if (pics.alt !== e.altKey) {
+      pics.alt = e.altKey;
+      drawKick(); // show / hide the crop handles
+    }
     const d = pics.drag;
     if (!d) {
       const hit = picHit(pt);
-      $('drawCanvas').style.cursor = !hit ? 'default' : hit.part === 'rot' ? 'grab' : hit.part === 'corner' ? 'nwse-resize' : e.altKey ? 'crosshair' : 'move';
+      let cursor = 'default';
+      if (hit) {
+        const s = hit.sides || {};
+        const diag = (s.l && s.t) || (s.r && s.b) ? 'nwse-resize' : 'nesw-resize';
+        if (hit.part === 'rot') cursor = 'grab';
+        else if (hit.part === 'corner') cursor = e.altKey ? diag : 'nwse-resize';
+        else if (hit.part === 'edge') cursor = e.altKey ? (s.l || s.r ? 'ew-resize' : 'ns-resize') : 'move';
+        else cursor = e.altKey ? 'crosshair' : 'move';
+      }
+      $('drawCanvas').style.cursor = cursor;
       return;
     }
     const p = picById(d.id);
@@ -1822,6 +1994,17 @@
       const l = Style.toImageSpace(g, pt.x, pt.y);
       d.u1 = Math.min(1, Math.max(0, l.u));
       d.v1 = Math.min(1, Math.max(0, l.v));
+    } else if (d.type === 'cropEdge') {
+      const l = Style.toImageSpace(d.g0, pt.x, pt.y); // measured against the picture as it was when the drag began
+      let u0 = 0;
+      let u1 = 1;
+      let v0 = 0;
+      let v1 = 1;
+      if (d.sides.l) u0 = Math.min(l.u, 0.94);
+      if (d.sides.r) u1 = Math.max(l.u, 0.06);
+      if (d.sides.t) v0 = Math.min(l.v, 0.94);
+      if (d.sides.b) v1 = Math.max(l.v, 0.06);
+      p.t = Style.cropTo(d.t0, p.nat, u0, v0, u1, v1, pt.rect.w, pt.rect.h, { expand: true });
     }
     if (d.type !== 'crop') queuePicSend(p.id);
     drawKick();
@@ -1867,6 +2050,16 @@
           ctx.arc(x, y, 6 * dpr, 0, Math.PI * 2);
           ctx.fill();
           ctx.stroke();
+        }
+        if (pics.alt) {
+          // crop handles: squares on the corners and in the middle of each edge
+          ctx.fillStyle = '#111214';
+          ctx.strokeStyle = '#ffffff';
+          ctx.lineWidth = 1.5 * dpr;
+          for (const [x, y] of [[-hw, -hh], [hw, -hh], [hw, hh], [-hw, hh], [0, -hh], [hw, 0], [0, hh], [-hw, 0]]) {
+            ctx.fillRect(x - 5 * dpr, y - 5 * dpr, 10 * dpr, 10 * dpr);
+            ctx.strokeRect(x - 5 * dpr, y - 5 * dpr, 10 * dpr, 10 * dpr);
+          }
         }
         const d = pics.drag;
         if (d && d.type === 'crop') {
@@ -1935,6 +2128,21 @@
       if (file) {
         e.preventDefault();
         addPictureFile(file);
+      }
+    });
+    window.addEventListener('keydown', (e) => {
+      if (e.key === 'Alt' && draw.mode === 'image') {
+        e.preventDefault();
+        if (!pics.alt) {
+          pics.alt = true;
+          drawKick();
+        }
+      }
+    });
+    window.addEventListener('keyup', (e) => {
+      if (e.key === 'Alt' && pics.alt) {
+        pics.alt = false;
+        drawKick();
       }
     });
     window.addEventListener('dragover', (e) => e.preventDefault());
@@ -2083,7 +2291,49 @@
     updateViewerTools();
   }
 
-  const KILL_HINT = 'Strg+Alt+Shift+R';
+  const KILL_HINT = 'F8 (oder Strg+Alt+Umschalt+R)';
+
+  /* ---- the way out: tab + bar at the top edge, F8 ---- */
+
+  const ctlTop = { pinned: false, timer: 0 };
+
+  function ctlTopOpen(open) {
+    $('ctlTop').classList.toggle('open', open);
+  }
+
+  /** Shown while the mouse is in the top strip (or over the bar); hides again a moment after it left. */
+  function ctlTopPoke(e) {
+    if (!ctl.engaged) return;
+    const top = $('viewerWrap').getBoundingClientRect().top;
+    const near = e.clientY - top < 10;
+    if (near) {
+      clearTimeout(ctlTop.timer);
+      ctlTopOpen(true);
+    } else if (!ctlTop.pinned && !$('ctlTop').matches(':hover')) {
+      clearTimeout(ctlTop.timer);
+      ctlTop.timer = setTimeout(() => !ctlTop.pinned && !$('ctlTop').matches(':hover') && ctlTopOpen(false), 1200);
+    }
+  }
+
+  function bindCtlTop() {
+    const bar = $('ctlTop');
+    // nothing from the bar may reach the friend's PC
+    for (const type of ['mousedown', 'mouseup', 'mousemove', 'wheel', 'contextmenu', 'dblclick']) bar.addEventListener(type, (e) => e.stopPropagation(), { passive: type !== 'wheel' });
+    bar.addEventListener('mouseleave', () => {
+      clearTimeout(ctlTop.timer);
+      ctlTop.timer = setTimeout(() => !ctlTop.pinned && ctlTopOpen(false), 900);
+    });
+    $('ctlTab').addEventListener('click', () => {
+      ctlTop.pinned = !$('ctlTop').classList.contains('open');
+      ctlTopOpen(ctlTop.pinned);
+    });
+    $('btnCtlRelease').addEventListener('click', () => disengage());
+    $('btnCtlWindowed').addEventListener('click', () => document.fullscreenElement && document.exitFullscreen().catch(() => {}));
+    $('btnCtlLeave').addEventListener('click', () => {
+      endControl(null, true);
+      leaveViewer();
+    });
+  }
 
   async function engage() {
     if (ctl.state !== 'granted' || ctl.engaged) return;
@@ -2091,11 +2341,17 @@
     $('viewerWrap').classList.add('controlling');
     $('controlOverlay').classList.remove('hidden');
     $('streamBar').classList.add('idle');
+    ctlTop.pinned = false;
+    $('ctlText').textContent = `Du steuerst den PC von ${viewer.info.name || 'deinem Freund'}`;
+    $('ctlTop').classList.remove('hidden');
+    ctlTopOpen(true); // shown for a moment so that the way out is known
+    ctlTop.timer = setTimeout(() => !ctlTop.pinned && ctlTopOpen(false), 4000);
     setControlStatus(`Du steuerst den PC von ${viewer.info.name || 'deinem Freund'}. ${KILL_HINT} gibt Maus & Tastatur frei.`, 'ok');
     window.addEventListener('keydown', onControlKey, true);
     window.addEventListener('keyup', onControlKey, true);
     window.addEventListener('blur', onControlBlur);
     const wrap = $('viewerWrap');
+    wrap.addEventListener('mousemove', ctlTopPoke);
     wrap.addEventListener('mousemove', onControlMove);
     wrap.addEventListener('mousedown', onControlButton);
     wrap.addEventListener('mouseup', onControlButton);
@@ -2122,10 +2378,14 @@
     ctl.engaged = false;
     $('viewerWrap').classList.remove('controlling');
     $('controlOverlay').classList.add('hidden');
+    clearTimeout(ctlTop.timer);
+    ctlTopOpen(false);
+    $('ctlTop').classList.add('hidden');
     window.removeEventListener('keydown', onControlKey, true);
     window.removeEventListener('keyup', onControlKey, true);
     window.removeEventListener('blur', onControlBlur);
     const wrap = $('viewerWrap');
+    wrap.removeEventListener('mousemove', ctlTopPoke);
     wrap.removeEventListener('mousemove', onControlMove);
     wrap.removeEventListener('mousedown', onControlButton);
     wrap.removeEventListener('mouseup', onControlButton);
@@ -2158,7 +2418,7 @@
     const v = $('remoteVideo');
     if (!v.videoWidth) return null;
     const r = v.getBoundingClientRect();
-    const scale = viewer.zoom === 'fill' ? Math.max(r.width / v.videoWidth, r.height / v.videoHeight) : Math.min(r.width / v.videoWidth, r.height / v.videoHeight);
+    const scale = Math.min(r.width / v.videoWidth, r.height / v.videoHeight);
     const cw = v.videoWidth * scale;
     const ch = v.videoHeight * scale;
     const x = (e.clientX - (r.left + (r.width - cw) / 2)) / cw;
@@ -2199,7 +2459,8 @@
     if (!ctl.engaged) return;
     e.preventDefault();
     e.stopPropagation();
-    if (e.type === 'keydown' && e.ctrlKey && e.altKey && e.shiftKey && e.code === 'KeyR') return disengage();
+    if (e.type === 'keydown' && (e.code === 'F8' || (e.ctrlKey && e.altKey && e.shiftKey && e.code === 'KeyR'))) return disengage();
+    if (e.code === 'F8') return; // the key up of the release key goes nowhere
     if (!e.code || e.code === 'Unidentified') return;
     const down = e.type === 'keydown';
     const flush = down && e.code === 'KeyV' && e.ctrlKey && ctl.clip;
@@ -2213,12 +2474,17 @@
   }
 
   function bindControl() {
+    bindCtlTop();
     $('btnControl').addEventListener('click', requestControl);
     $('btnEngage').addEventListener('click', engage);
     $('btnReleaseControl').addEventListener('click', () => endControl(null, true));
     $('remoteVideo').addEventListener('mousedown', () => ctl.state === 'granted' && !ctl.engaged && engage());
     stf.onHookKey((ev) => {
       if (!ctl.engaged || !ev || typeof ev.code !== 'string') return;
+      if (ev.code === 'F8') {
+        if (ev.type === 'down') disengage(); // the way out also works when the hook sees the key first
+        return;
+      }
       ctl.chain = ctl.chain.then(() => sendInput({ t: ev.type === 'down' ? 'kd' : 'ku', code: ev.code })).catch(() => {});
     });
     document.addEventListener('fullscreenchange', () => {
@@ -2454,12 +2720,23 @@
     state.prefs = settings.prefs || {};
     state.myId = settings.id;
 
-    if (info.dev) window.__stfDebug = { state, host, viewer, ctl, apps, draw, pics, addPictureFile }; // dev builds only (for the automated tests)
+    if (info.dev) window.__stfDebug = { state, host, viewer, ctl, apps, draw, pics, addPictureFile, view }; // dev builds only (for the automated tests)
     host.allowDraw = state.prefs.allowDraw !== false;
     $('chkAllowDraw').checked = host.allowDraw;
-    applyHostQuality(/^f?[0-4]$/.test(String(state.prefs.hostQuality)) ? String(state.prefs.hostQuality) : '0', false);
+    {
+      // older versions stored "0".."4" (auto up to a step) or "f0".."f2" (pinned) in hostQuality
+      const legacy = ['1080x60', '720x60', '720x30', '540x30', '360x30'];
+      const old = /^f?[0-4]$/.exec(String(state.prefs.hostQuality));
+      const mode = state.prefs.hostMode || (old && String(state.prefs.hostQuality).startsWith('f') ? 'fixed' : 'auto');
+      const key = PRESET_RE.test(String(state.prefs.hostPreset)) ? state.prefs.hostPreset : old ? legacy[Number(String(state.prefs.hostQuality).replace('f', ''))] || '1080x60' : '1080x60';
+      applyHostQuality(mode, key, false);
+    }
     $('viewVolume').value = typeof state.prefs.volume === 'number' ? state.prefs.volume : 100;
-    $('selQuality').value = ['0', '1', '2', '3', '4'].includes(state.prefs.quality) ? state.prefs.quality : '0';
+    {
+      const legacy = { 0: 'auto', 1: '720x60', 2: '720x30', 3: '540x30', 4: '360x30' };
+      const q = String(state.prefs.quality);
+      $('selQuality').value = PRESET_RE.test(q) ? q : legacy[q] || 'auto';
+    }
     apps.mode = ['all', 'include', 'exclude'].includes(state.prefs.audioMode) ? state.prefs.audioMode : 'exclude';
     if (Array.isArray(state.prefs.audioNames)) apps.names = new Set(state.prefs.audioNames.filter((n) => typeof n === 'string').slice(0, 60));
     draw.color = Style.cleanColor(state.prefs.drawColor);
@@ -2481,7 +2758,6 @@
     bindControl();
     bindSettings();
     setAudioMode(apps.mode);
-    setZoom(['fit', 'fill', '100'].includes(state.prefs.zoom) ? state.prefs.zoom : 'fit');
     showView('welcome');
     renderHostChip();
     updateViewerTools();

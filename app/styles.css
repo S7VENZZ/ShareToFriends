@@ -138,9 +138,12 @@ input[type="checkbox"], input[type="radio"] { accent-color: var(--blurple); widt
 .view { position: relative; flex: 1; min-width: 0; display: flex; flex-direction: column; animation: rise 0.22s var(--ease); }
 .video-wrap { position: relative; flex: 1; min-height: 0; background: #000; display: flex; align-items: center; justify-content: center; overflow: hidden; }
 .video-wrap video { width: 100%; height: 100%; object-fit: contain; background: #000; }
-.viewer-wrap.fill video { object-fit: cover; }
-.viewer-wrap.native { overflow: auto; display: block; }
-.viewer-wrap.native video { width: auto; height: auto; max-width: none; object-fit: none; }
+.video-wrap video { transform-origin: 0 0; will-change: transform; }
+.viewer-wrap.zoomed { cursor: grab; }
+.viewer-wrap.panning, .viewer-wrap.panning * { cursor: grabbing !important; }
+.zoom-badge { position: absolute; top: 14px; right: 14px; z-index: 6; border: 0; border-radius: 999px; padding: 5px 12px; font: 600 12.5px/1 inherit; background: rgba(17, 18, 20, 0.85); color: #fff; cursor: pointer; box-shadow: 0 4px 14px rgba(0, 0, 0, 0.45); }
+.zoom-badge:hover { background: rgba(88, 101, 242, 0.95); }
+.zoom-badge.hidden { display: none; }
 .viewer-wrap:fullscreen { background: #000; }
 .draw-canvas { position: absolute; inset: 0; width: 100%; height: 100%; pointer-events: none; }
 .viewer-wrap.drawing .draw-canvas { pointer-events: auto; cursor: crosshair; }
@@ -153,7 +156,26 @@ input[type="checkbox"], input[type="radio"] { accent-color: var(--blurple); widt
 
 .stats-overlay { position: absolute; top: 56px; left: 10px; background: rgba(0, 0, 0, 0.72); color: #fff; font: 12px/1.5 "Cascadia Mono", Consolas, monospace; padding: 6px 10px; border-radius: 4px; white-space: pre; pointer-events: none; }
 .view-hint { position: absolute; left: 50%; bottom: 84px; transform: translateX(-50%); background: rgba(0, 0, 0, 0.78); color: #fff; padding: 5px 12px; border-radius: 6px; font-weight: 600; pointer-events: none; animation: rise 0.2s var(--ease); }
-.control-overlay { position: absolute; top: 8px; left: 50%; transform: translateX(-50%); background: rgba(218, 55, 60, 0.92); color: #fff; padding: 4px 12px; border-radius: 4px; font-size: 12px; font-weight: 600; pointer-events: none; }
+.control-overlay { position: absolute; top: 28px; left: 50%; transform: translateX(-50%); background: rgba(218, 55, 60, 0.92); color: #fff; padding: 4px 12px; border-radius: 4px; font-size: 12px; font-weight: 600; pointer-events: none; }
+
+/* ---------- Way out while controlling (top edge) ---------- */
+.ctl-top { position: absolute; top: 0; left: 0; right: 0; z-index: 8; display: flex; flex-direction: column; align-items: center; pointer-events: none; }
+.ctl-top.hidden { display: none; }
+.ctl-panel {
+  pointer-events: auto; display: flex; align-items: center; gap: 8px; padding: 8px 12px; border-radius: 0 0 12px 12px; max-width: calc(100% - 24px);
+  background: rgba(17, 18, 20, 0.95); border: 1px solid rgba(255, 255, 255, 0.08); border-top: 0; box-shadow: 0 8px 28px rgba(0, 0, 0, 0.55);
+  transform: translateY(-110%); opacity: 0; transition: transform 0.22s var(--ease), opacity 0.22s ease; will-change: transform, opacity;
+}
+.ctl-top.open .ctl-panel { transform: none; opacity: 1; }
+.ctl-text { font-size: 12.5px; font-weight: 600; color: var(--text-muted); padding: 0 6px; white-space: nowrap; }
+.ctl-tab {
+  pointer-events: auto; margin-top: -1px; width: 48px; height: 16px; border: 0; border-radius: 0 0 10px 10px; padding: 0; cursor: pointer;
+  background: rgba(17, 18, 20, 0.7); color: #fff; opacity: 0.55; display: grid; place-items: center; transition: opacity 0.15s, background 0.15s;
+}
+.ctl-tab:hover, .ctl-top.open .ctl-tab { opacity: 1; background: rgba(17, 18, 20, 0.95); }
+.ctl-tab .icon { width: 16px; height: 16px; transition: transform 0.2s var(--ease); }
+.ctl-top.open .ctl-tab .icon { transform: rotate(180deg); }
+@container (max-width: 860px) { .ctl-panel .bar-btn span { display: none; } }
 
 /* ---------- Floating bars (Discord stream bar) ---------- */
 .float-bar {

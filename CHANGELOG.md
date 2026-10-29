@@ -1,5 +1,16 @@
 # Changelog
 
+## Unreleased
+
+- **Echte 60 FPS:** Die Bildschirmaufnahme (`getDisplayMedia`) war auf Windows bei etwa 53 Bildern pro Sekunde gedeckelt, egal was angefordert wurde (gemessen, auch ohne Encoder). Die App nutzt jetzt die klassische Desktop-Aufnahme und kommt auf 60 FPS (gemessen: 59,8 FPS bei 1080p mit dem NVIDIA-Hardware-Encoder, vorher 52). `getDisplayMedia` bleibt als Rückfall.
+- **Qualität frei wählbar:** 1080p, 720p, 540p und 360p jeweils mit 60, 30 oder 15 FPS, für den Streamer („Auto bis …“ oder „Fest“) und für jeden Zuschauer (Obergrenze).
+- **Zoom wie bei Discord:** Mausrad zoomt an die Stelle unter dem Zeiger, Ziehen verschiebt, Zurückdrehen führt auf „angepasst“. Die Leiste „Anpassen / Füllen / 100 %“ ist weg, das Bild ist immer eingepasst.
+- **Warteraum:** Zuschauer können sich verbinden, bevor der Streamer teilt, und bekommen den Stream automatisch, sobald er startet (auch nach einer Pause).
+- **Ausweg aus der Fernsteuerung:** **F8** gibt Maus und Tastatur frei; am oberen Rand erscheint eine Leiste mit „Steuerung freigeben“, „Vollbild verlassen“, „Stream verlassen“ (kleiner Pfeil bleibt sichtbar). Man ist nicht mehr im Stream gefangen.
+- **Bilder zuschneiden an Ecken und Kanten:** Alt gedrückt halten und an einer Ecke oder Kante ziehen; nach außen ziehen nimmt es zurück.
+- **Minimierte Fenster** stehen in der Fensterliste und werden beim Teilen automatisch wiederhergestellt.
+- **Mischpult:** Apps, die auf einem anderen Gerät als dem Windows-Standard spielen (Sonar, GoXLR …), werden mit ⚠ und einer Anleitung markiert, denn Windows kann deren Ton nicht abgreifen.
+
 ## 2.0.5
 
 - **Update-Einstellungen vereinfacht:** Keine Update-Adresse mehr zum Eintragen, die App nutzt automatisch die GitHub-Releases. Die Einstellungen zeigen Version, „Zuletzt geprüft“ und Status; „Automatisch aktualisieren“ lässt sich an- und ausschalten. Geprüft wird beim Start und danach alle 10 Minuten.

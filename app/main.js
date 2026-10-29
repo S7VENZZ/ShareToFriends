@@ -168,6 +168,19 @@ async function listSources(opts = {}) {
   const labels = monitorLabels();
   for (const s of sources) sourceDisplayIds.set(s.id, s.display_id || '');
 
+  // Windows cannot capture minimized windows (Chromium does not list them either). They are listed anyway and
+  // restored when picked, so that Spotify, Discord, a game in the taskbar ... can be chosen.
+  const minimized = [];
+  if (types.includes('window') && appAudio) {
+    const have = new Set(sources.map((s) => s.id));
+    const own = new Set([process.pid]);
+    for (const w of await appAudio.minimizedWindows()) {
+      const id = `window:${w.hwnd}:0`;
+      if (have.has(id) || own.has(w.pid) || w.title.startsWith('ShareToFriends')) continue;
+      minimized.push({ id, name: w.title.slice(0, 120), detail: 'minimiert – wird beim Teilen geöffnet', order: 2000, type: 'window', thumbnail: '', appIcon: '', minimized: true });
+    }
+  }
+
   return sources
     .filter((s) => !hidden.has(s.id) && s.name.trim() !== '' && !s.name.startsWith('ShareToFriends'))
     .map((s) => {
@@ -184,6 +197,7 @@ async function listSources(opts = {}) {
         appIcon: iconCache.get(s.id) || '',
       };
     })
+    .concat(minimized)
     .sort((a, b) => a.order - b.order);
 }
 
@@ -309,8 +323,10 @@ function registerIpc() {
   });
   handle('sources:list', (opts) => listSources(opts));
   handle('monitors:identify', () => identifyMonitors());
-  handle('capture:select', (id) => {
+  handle('capture:select', async (id) => {
     selectedSourceId = typeof id === 'string' && id.length < 200 ? id : null;
+    const m = /^window:(\d+):\d+$/.exec(selectedSourceId || '');
+    if (m && appAudio) await appAudio.restoreWindow(Number(m[1])); // only acts when the window is minimized
     return true;
   });
 

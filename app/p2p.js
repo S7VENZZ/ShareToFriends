@@ -111,8 +111,10 @@
     }
 
     watchConnection(onFail) {
-      this.pc.onconnectionstatechange = () => {
-        const s = this.pc.connectionState;
+      const pc = this.pc;
+      pc.onconnectionstatechange = () => {
+        if (pc !== this.pc) return; // an earlier connection (the stream stopped and started again)
+        const s = pc.connectionState;
         this.hooks.onState && this.hooks.onState(s);
         if (s === 'failed' || s === 'closed') onFail(s);
       };
@@ -142,7 +144,11 @@
       this.authed = false;
       this.nH = '';
       this.controller = AD.createController();
-      this.viewerMaxTier = 0;
+      this.viewerMaxHeight = 1080; // limits chosen by the viewer and by the streamer
+      this.viewerMaxFps = 60;
+      this.hostMaxHeight = 1080;
+      this.hostMaxFps = 60;
+      this.hostForce = null; // { height, fps } when the streamer pinned one step
       this.videoSender = null;
       this.lastApplied = '';
       this.lastBytes = null;
@@ -190,10 +196,12 @@
     async startRtc() {
       const media = this.getMedia();
       if (!media || !media.video) {
-        this.sig.relay(this.sid, { k: 'refuse', reason: 'not-sharing' });
-        this.close('not-sharing', false);
+        // Nothing shared yet: the viewer stays in the waiting room (authenticated, no media connection) until the stream starts.
+        this.waiting = true;
+        this.sig.relay(this.sid, { k: 'waiting', name: typeof this.hostName === 'function' ? this.hostName() : '' });
         return;
       }
+      this.waiting = false;
       const pc = new RTCPeerConnection(rtcConfig(this.getIce()));
       this.pc = pc;
       this.ctl = pc.createDataChannel('ctl', { ordered: true });
@@ -214,6 +222,27 @@
       const sdp = opusStereo(offer.sdp);
       await pc.setLocalDescription({ type: 'offer', sdp });
       this.sig.relay(this.sid, { k: 'sdp', type: 'offer', sdp, mac: await this.signSdp('offer', sdp) });
+    }
+
+    /** The streamer stopped sharing: drop the media connection but keep the viewer in the waiting room. */
+    pause() {
+      if (this.closed || !this.authed) return;
+      const pc = this.pc;
+      this.pc = null;
+      this.ctl = null;
+      this.fast = null;
+      this.videoSender = null;
+      this.pendingIce = [];
+      this.controller = AD.createController();
+      this.lastApplied = '';
+      this.lastBytes = null;
+      try {
+        pc && pc.close();
+      } catch {
+        /* ignore */
+      }
+      this.waiting = true;
+      this.sig.relay(this.sid, { k: 'waiting', name: typeof this.hostName === 'function' ? this.hostName() : '' });
     }
 
     async handleAnswer(d) {
@@ -248,7 +277,16 @@
       let sendBps = 0;
       if (this.lastBytes) sendBps = ((out.bytesSent - this.lastBytes.bytes) * 8 * 1000) / Math.max(1, out.timestamp - this.lastBytes.ts);
       const decision = this.controller.update(
-        { availableBps: pair ? pair.availableOutgoingBitrate : undefined, sendBps, rttMs, qualityLimit: out.qualityLimitationReason, maxTierIndex: Math.max(this.viewerMaxTier || 0, this.hostMaxTier || 0), forceTierIndex: Number.isInteger(this.hostForceTier) ? this.hostForceTier : undefined },
+        {
+          availableBps: pair ? pair.availableOutgoingBitrate : undefined,
+          sendBps,
+          rttMs,
+          qualityLimit: out.qualityLimitationReason,
+          maxHeight: Math.min(this.viewerMaxHeight, this.hostMaxHeight),
+          maxFps: Math.min(this.viewerMaxFps, this.hostMaxFps),
+          forceHeight: this.hostForce ? this.hostForce.height : undefined,
+          forceFps: this.hostForce ? this.hostForce.fps : undefined,
+        },
         now
       );
 
@@ -315,10 +353,13 @@
       this.sid = null;
       this.waiting = null;
       this.stream = null;
-      this.connected = false;
+      this.connected = false; // media connection up (live)
+      this.joined = false; // signed in: either live or waiting for the stream to start
+      this.live = false;
+      this.hostName = '';
     }
 
-    /** @returns {Promise<void>} resolves when media + control channel are up; rejects with Error(code). */
+    /** @returns {Promise<void>} resolves when media + control channel are up OR the host has not started sharing yet (waiting room); rejects with Error(code). */
     async connect() {
       const key = await A.deriveKey(this.password, this.hostId);
       this.baseKey = key;
@@ -338,8 +379,12 @@
         const timer = setTimeout(() => finish(new Error('timeout')), CONNECT_TIMEOUT_MS);
         this.finish = finish;
         this.onCtlOpen = () => {
+          const first = !this.joined;
           this.connected = true;
+          this.live = true;
+          this.joined = true;
           finish();
+          if (!first && this.hooks.onLive) this.hooks.onLive(this); // the stream started after a wait
         };
         this.sig
           .connectTo(this.hostId)
@@ -357,6 +402,8 @@
         if (d.k === 'auth-ok') return await this.handleAuthOk(d);
         if (d.k === 'auth-fail') return this.finish && this.finish(new Error('wrong-password'));
         if (d.k === 'refuse') return this.finish && this.finish(new Error(d.reason || 'refused'));
+        if (d.k === 'waiting') return this.handleWaiting(d);
+        if (d.k === 'kicked') return this.hooks.onCtl && this.hooks.onCtl({ t: 'kick' });
         if (d.k === 'sdp') return await this.handleOffer(d);
         if (d.k === 'ice') return await this.acceptIce(d);
       } catch (err) {
@@ -381,11 +428,39 @@
       this.sessionKey = await A.sessionKey(this.baseKey, this.nH, this.nV);
     }
 
+    /** The host is online but not sharing (yet, or any more). */
+    handleWaiting(d) {
+      if (!this.sessionKey) return; // only after the password handshake
+      this.hostName = typeof d.name === 'string' ? cleanName(d.name) : this.hostName;
+      this.dropMedia();
+      const first = !this.joined;
+      this.joined = true;
+      this.live = false;
+      if (this.finish) this.finish(); // connect() is done: we are in the room
+      if (!first && this.hooks.onWaiting) this.hooks.onWaiting(this);
+    }
+
+    dropMedia() {
+      const pc = this.pc;
+      this.pc = null;
+      this.ctl = null;
+      this.fast = null;
+      this.stream = null;
+      this.connected = false;
+      this.pendingIce = [];
+      try {
+        pc && pc.close();
+      } catch {
+        /* ignore */
+      }
+    }
+
     async handleOffer(d) {
       if (!this.sessionKey || d.type !== 'offer' || typeof d.sdp !== 'string' || !(await A.verify(this.sessionKey, `sdp|offer|${d.sdp}`, d.mac))) {
         this.finish && this.finish(new Error('bad-sdp'));
         return;
       }
+      if (this.pc) this.dropMedia(); // a new stream after an earlier one
       const pc = new RTCPeerConnection(rtcConfig(this.getIce()));
       this.pc = pc;
       this.wireIceOut();

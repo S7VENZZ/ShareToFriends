@@ -118,19 +118,21 @@
    * Crop the displayed picture to the rectangle u0..u1 x v0..v1 (0..1 of what is shown now). The kept part stays
    * exactly where it is on screen and keeps its scale.
    */
-  function cropTo(t, nat, u0, v0, u1, v1, W, H) {
+  function cropTo(t, nat, u0, v0, u1, v1, W, H, opts) {
+    const fw = 1 - t.cl - t.cr;
+    const fh = 1 - t.ct - t.cb;
+    // with { expand: true } an edge can also move outwards again, back to the uncropped picture
+    const lo = opts && opts.expand ? [-t.cl / fw, -t.cr / fw, -t.ct / fh, -t.cb / fh] : [0, 0, 0, 0];
     const a = Math.min(u0, u1);
     const b = Math.max(u0, u1);
     const c = Math.min(v0, v1);
     const d = Math.max(v0, v1);
-    const ua = clampNum(a, 0, 1, 0);
-    const ub = clampNum(b, 0, 1, 1);
-    const va = clampNum(c, 0, 1, 0);
-    const vb = clampNum(d, 0, 1, 1);
+    const ua = clampNum(a, lo[0], 1, 0);
+    const ub = clampNum(b, 0, 1 - lo[1], 1);
+    const va = clampNum(c, lo[2], 1, 0);
+    const vb = clampNum(d, 0, 1 - lo[3], 1);
     if (ub - ua < 0.05 || vb - va < 0.05) return t; // too small to be intended
     const g = imageGeometry(t, nat, W, H);
-    const fw = 1 - t.cl - t.cr;
-    const fh = 1 - t.ct - t.cb;
     const next = {
       ...t,
       cl: t.cl + ua * fw,

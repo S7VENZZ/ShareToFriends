@@ -69,6 +69,24 @@ namespace Stf
     {
         [PreserveSig] int EnumAudioEndpoints(int dataFlow, int stateMask, out IMMDeviceCollection devices);
         [PreserveSig] int GetDefaultAudioEndpoint(int dataFlow, int role, out IMMDevice device);
+        [PreserveSig] int GetDevice([MarshalAs(UnmanagedType.LPWStr)] string id, out IMMDevice device);
+    }
+
+    [StructLayout(LayoutKind.Sequential)]
+    struct PropertyKey
+    {
+        public Guid fmtid;
+        public uint pid;
+    }
+
+    [ComImport, Guid("886D8EEB-8CF2-4446-8D02-CDBA1DBDCF99"), InterfaceType(ComInterfaceType.InterfaceIsIUnknown)]
+    interface IPropertyStore
+    {
+        [PreserveSig] int GetCount(out uint count);
+        [PreserveSig] int GetAt(uint index, out PropertyKey key);
+        [PreserveSig] int GetValue(ref PropertyKey key, IntPtr value); // PROPVARIANT, 24 bytes on x64
+        [PreserveSig] int SetValue(ref PropertyKey key, IntPtr value);
+        [PreserveSig] int Commit();
     }
 
     [ComImport, Guid("0BD7A1BE-7A1A-44DB-8397-CC5392387B5E"), InterfaceType(ComInterfaceType.InterfaceIsIUnknown)]
@@ -82,6 +100,8 @@ namespace Stf
     interface IMMDevice
     {
         [PreserveSig] int Activate(ref Guid iid, int clsCtx, IntPtr activationParams, [MarshalAs(UnmanagedType.IUnknown)] out object iface);
+        [PreserveSig] int OpenPropertyStore(int access, [MarshalAs(UnmanagedType.IUnknown)] out object properties);
+        [PreserveSig] int GetId([MarshalAs(UnmanagedType.LPWStr)] out string id);
     }
 
     [ComImport, Guid("77AA99A0-1BD6-484F-8BC7-2C654C9A9B6F"), InterfaceType(ComInterfaceType.InterfaceIsIUnknown)]
@@ -175,7 +195,11 @@ namespace Stf
                     if (!uint.TryParse(args[1], out pid) || pid == 0) return Fail("invalid pid");
                     return Capture(pid, args.Length >= 3 ? Convert.ToUInt32(args[2], 16) : 0x00060000u);
                 }
-                return Fail("usage: StfAudioCapture --list | --capture <pid>");
+                if (args.Length >= 1 && args[0] == "--devices") return Devices();
+                if (args.Length >= 1 && args[0] == "--windows") return Windows();
+                if (args.Length >= 2 && args[0] == "--restore") return Restore(args[1]);
+                if (args.Length >= 2 && args[0] == "--capture-device") return CaptureDevice(args[1]);
+                return Fail("usage: StfAudioCapture --list | --capture <pid> | --capture-device <device id>");
             }
             catch (Exception ex)
             {
@@ -212,11 +236,43 @@ namespace Stf
             public string Title;
             public bool Active;
             public float Peak;
+            public bool OnDefault; // has a session on the Windows default playback device
+            public string Device = ""; // id of the (first) playback device the process plays on
+            public string DeviceName = ""; // its friendly name, e.g. "Speakers (Realtek)"
+        }
+
+        [DllImport("ole32.dll")]
+        static extern int PropVariantClear(IntPtr pv);
+
+        // PKEY_Device_FriendlyName
+        static string FriendlyName(IMMDevice device)
+        {
+            IntPtr pv = Marshal.AllocHGlobal(24);
+            try
+            {
+                for (int i = 0; i < 24; i += 8) Marshal.WriteInt64(pv, i, 0);
+                object storeObj;
+                if (device.OpenPropertyStore(0, out storeObj) != 0) return "";
+                IPropertyStore store = (IPropertyStore)storeObj;
+                PropertyKey key = new PropertyKey();
+                key.fmtid = new Guid("a45c254e-df1c-4efd-8020-67d146a850e0");
+                key.pid = 14;
+                if (store.GetValue(ref key, pv) != 0) return "";
+                short vt = Marshal.ReadInt16(pv, 0);
+                string name = vt == 0x1F ? Marshal.PtrToStringUni(Marshal.ReadIntPtr(pv, 8)) : "";
+                PropVariantClear(pv);
+                return name ?? "";
+            }
+            catch (Exception) { return ""; }
+            finally { Marshal.FreeHGlobal(pv); }
         }
 
         // Collects the audio sessions of one playback device into byPid (one entry per process).
-        static void CollectSessions(IMMDevice device, Dictionary<uint, Entry> byPid, int self)
+        static void CollectSessions(IMMDevice device, string defaultId, Dictionary<uint, Entry> byPid, int self)
         {
+            string deviceId;
+            if (device.GetId(out deviceId) != 0) deviceId = "";
+            string deviceName = FriendlyName(device);
             Guid iidManager = typeof(IAudioSessionManager2).GUID;
             object managerObj;
             if (device.Activate(ref iidManager, 23, IntPtr.Zero, out managerObj) != 0) return;
@@ -260,6 +316,12 @@ namespace Stf
                 }
                 if (state == 1) e.Active = true;
                 if (peak > e.Peak) e.Peak = peak;
+                if (e.Device.Length == 0 || (state == 1 && !e.Active))
+                {
+                    e.Device = deviceId;
+                    e.DeviceName = deviceName;
+                }
+                if (deviceId == defaultId) e.OnDefault = true;
             }
         }
 
@@ -270,6 +332,9 @@ namespace Stf
             IMMDeviceEnumerator enumerator = (IMMDeviceEnumerator)new MMDeviceEnumeratorClass();
             Dictionary<uint, Entry> byPid = new Dictionary<uint, Entry>();
             int self = Process.GetCurrentProcess().Id;
+            string defaultId = "";
+            IMMDevice defaultDevice;
+            if (enumerator.GetDefaultAudioEndpoint(0, 1, out defaultDevice) == 0 && defaultDevice != null) defaultDevice.GetId(out defaultId);
 
             IMMDeviceCollection devices;
             if (enumerator.EnumAudioEndpoints(0, 1, out devices) == 0 && devices != null)
@@ -280,14 +345,14 @@ namespace Stf
                 {
                     IMMDevice dev;
                     if (devices.Item(d, out dev) != 0 || dev == null) continue;
-                    try { CollectSessions(dev, byPid, self); } catch (Exception) { }
+                    try { CollectSessions(dev, defaultId, byPid, self); } catch (Exception) { }
                 }
             }
             if (byPid.Count == 0)
             {
                 IMMDevice device;
                 if (enumerator.GetDefaultAudioEndpoint(0, 1, out device) != 0) return Fail("no default playback device");
-                CollectSessions(device, byPid, self);
+                CollectSessions(device, defaultId, byPid, self);
             }
 
             StringBuilder sb = new StringBuilder("[");
@@ -301,6 +366,9 @@ namespace Stf
                   .Append(",\"title\":").Append(Json(e.Title))
                   .Append(",\"active\":").Append(e.Active ? "true" : "false")
                   .Append(",\"peak\":").Append(e.Peak.ToString("0.####", System.Globalization.CultureInfo.InvariantCulture))
+                  .Append(",\"onDefault\":").Append(e.OnDefault ? "true" : "false")
+                  .Append(",\"device\":").Append(Json(e.Device))
+                  .Append(",\"deviceName\":").Append(Json(e.DeviceName))
                   .Append('}');
             }
             sb.Append(']');
@@ -332,7 +400,15 @@ namespace Stf
             if (handler.Result != 0) return Fail("activation failed: 0x" + handler.Result.ToString("x8"));
             IAudioClient client = (IAudioClient)handler.Interface;
 
-            // WAVEFORMATEX: PCM, 2 ch, 48000 Hz, 16 bit
+            IntPtr fmt = Format16();
+            int hr = client.Initialize(0, streamFlags, 200000, 0, fmt, IntPtr.Zero);
+            if (hr != 0) return Fail("initialize failed: 0x" + hr.ToString("x8"));
+            return Pump(client);
+        }
+
+        // WAVEFORMATEX: PCM, 2 ch, 48000 Hz, 16 bit
+        static IntPtr Format16()
+        {
             IntPtr fmt = Marshal.AllocHGlobal(18);
             Marshal.WriteInt16(fmt, 0, 1);
             Marshal.WriteInt16(fmt, 2, 2);
@@ -341,9 +417,109 @@ namespace Stf
             Marshal.WriteInt16(fmt, 12, 4);
             Marshal.WriteInt16(fmt, 14, 16);
             Marshal.WriteInt16(fmt, 16, 0);
-            int hr = client.Initialize(0, streamFlags, 200000, 0, fmt, IntPtr.Zero);
-            if (hr != 0) return Fail("initialize failed: 0x" + hr.ToString("x8"));
+            return fmt;
+        }
 
+        // ---- windows: Windows cannot capture a minimized window, and Chromium does not even list it ----
+        delegate bool EnumWindowsProc(IntPtr hwnd, IntPtr lParam);
+        [DllImport("user32.dll")] static extern bool EnumWindows(EnumWindowsProc cb, IntPtr lParam);
+        [DllImport("user32.dll")] static extern bool IsWindowVisible(IntPtr hwnd);
+        [DllImport("user32.dll")] static extern bool IsIconic(IntPtr hwnd);
+        [DllImport("user32.dll")] static extern bool ShowWindow(IntPtr hwnd, int cmd);
+        [DllImport("user32.dll", CharSet = CharSet.Unicode)] static extern int GetWindowText(IntPtr hwnd, StringBuilder text, int max);
+        [DllImport("user32.dll")] static extern int GetWindowLong(IntPtr hwnd, int index);
+        [DllImport("user32.dll")] static extern IntPtr GetWindow(IntPtr hwnd, uint cmd);
+        [DllImport("user32.dll")] static extern uint GetWindowThreadProcessId(IntPtr hwnd, out uint pid);
+        [DllImport("dwmapi.dll")] static extern int DwmGetWindowAttribute(IntPtr hwnd, int attr, out int value, int size);
+
+        // The windows Alt+Tab would show: visible, titled, no owner, not a tool window, not cloaked (other virtual desktop).
+        static bool IsAppWindow(IntPtr h)
+        {
+            if (!IsWindowVisible(h)) return false;
+            if (GetWindow(h, 4) != IntPtr.Zero) return false; // GW_OWNER
+            int ex = GetWindowLong(h, -20);
+            if ((ex & 0x80) != 0 && (ex & 0x40000) == 0) return false; // WS_EX_TOOLWINDOW without WS_EX_APPWINDOW
+            int cloaked = 0;
+            DwmGetWindowAttribute(h, 14, out cloaked, 4);
+            return cloaked == 0;
+        }
+
+        static int Windows()
+        {
+            StringBuilder sb = new StringBuilder("[");
+            int self = Process.GetCurrentProcess().Id;
+            EnumWindows(delegate (IntPtr h, IntPtr l)
+            {
+                if (!IsAppWindow(h) || !IsIconic(h)) return true;
+                StringBuilder title = new StringBuilder(256);
+                if (GetWindowText(h, title, 256) <= 0) return true;
+                uint pid;
+                GetWindowThreadProcessId(h, out pid);
+                string proc = "";
+                try { proc = Process.GetProcessById((int)pid).ProcessName; } catch (Exception) { }
+                if (sb.Length > 1) sb.Append(',');
+                sb.Append("{\"hwnd\":").Append(h.ToInt64()).Append(",\"title\":").Append(Json(title.ToString())).Append(",\"process\":").Append(Json(proc)).Append('}');
+                return true;
+            }, IntPtr.Zero);
+            Console.Out.Write(sb.Append(']').ToString());
+            return 0;
+        }
+
+        // Brings a minimized window back (only if it is minimized) so that it can be captured.
+        static int Restore(string handle)
+        {
+            long value;
+            if (!long.TryParse(handle, out value) || value <= 0) return Fail("invalid window");
+            IntPtr h = new IntPtr(value);
+            if (!IsIconic(h)) return 0;
+            ShowWindow(h, 9); // SW_RESTORE
+            return 0;
+        }
+
+        static int Devices()
+        {
+            IMMDeviceEnumerator enumerator = (IMMDeviceEnumerator)new MMDeviceEnumeratorClass();
+            string defaultId = "";
+            IMMDevice def;
+            if (enumerator.GetDefaultAudioEndpoint(0, 1, out def) == 0 && def != null) def.GetId(out defaultId);
+            IMMDeviceCollection devices;
+            if (enumerator.EnumAudioEndpoints(0, 1, out devices) != 0 || devices == null) return Fail("cannot list devices");
+            uint n;
+            devices.GetCount(out n);
+            StringBuilder sb = new StringBuilder("[");
+            for (uint i = 0; i < n; i++)
+            {
+                IMMDevice d;
+                if (devices.Item(i, out d) != 0 || d == null) continue;
+                string id;
+                if (d.GetId(out id) != 0) continue;
+                if (sb.Length > 1) sb.Append(',');
+                sb.Append("{\"id\":").Append(Json(id)).Append(",\"name\":").Append(Json(FriendlyName(d))).Append(",\"default\":").Append(id == defaultId ? "true" : "false").Append('}');
+            }
+            Console.Out.Write(sb.Append(']').ToString());
+            return 0;
+        }
+
+        // Everything a playback device plays (all apps on it): WASAPI loopback of that endpoint.
+        static int CaptureDevice(string deviceId)
+        {
+            IMMDeviceEnumerator enumerator = (IMMDeviceEnumerator)new MMDeviceEnumeratorClass();
+            IMMDevice device;
+            if (enumerator.GetDevice(deviceId, out device) != 0 || device == null) return Fail("device not found");
+            Guid iid = typeof(IAudioClient).GUID;
+            object obj;
+            if (device.Activate(ref iid, 23, IntPtr.Zero, out obj) != 0) return Fail("cannot open the device");
+            IAudioClient client = (IAudioClient)obj;
+            // LOOPBACK 0x20000 | EVENTCALLBACK 0x40000 | AUTOCONVERTPCM 0x80000000 | SRC_DEFAULT_QUALITY 0x08000000
+            int hr = client.Initialize(0, 0x88060000u, 200000, 0, Format16(), IntPtr.Zero);
+            if (hr != 0) return Fail("loopback initialize failed: 0x" + hr.ToString("x8"));
+            return Pump(client);
+        }
+
+        // Reads packets and writes raw PCM (48 kHz, 16 bit, stereo) to stdout until the parent closes our stdin.
+        static int Pump(IAudioClient client)
+        {
+            int hr;
             AutoResetEvent audioEvent = new AutoResetEvent(false);
             hr = client.SetEventHandle(audioEvent.SafeWaitHandle.DangerousGetHandle());
             if (hr != 0) return Fail("set event failed: 0x" + hr.ToString("x8"));

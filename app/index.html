@@ -127,19 +127,31 @@
           <button id="btnSwitch" class="bar-btn" title="Quelle sofort wechseln"><svg class="icon"><use href="#i-swap"/></svg><span>Quelle</span></button>
           <button id="btnAudio" class="bar-btn" title="Audio-Mischpult"><svg class="icon"><use href="#i-audio"/></svg><span>Audio</span></button>
           <button id="btnClearAll" class="bar-btn" title="Alle Zeichnungen vom Desktop entfernen"><svg class="icon"><use href="#i-trash"/></svg><span>Desktop leeren</span></button>
-          <select id="selHostQuality" class="bar-select" aria-label="Qualität" title="Auto passt sich selbst an deine Leitung an und senkt bei Bedarf, damit dein Ping stabil bleibt. „Fest“ hält die Stufe immer – ohne Ping-Schutz.">
-            <optgroup label="Automatisch (empfohlen)">
-              <option value="0">Auto (bis 1080p60)</option>
-              <option value="1">Auto, max. 720p 60</option>
-              <option value="2">Auto, max. 720p 30</option>
-              <option value="3">Auto, max. 540p 30</option>
-              <option value="4">Auto, max. 360p 30</option>
-            </optgroup>
-            <optgroup label="Fest (ohne Ping-Schutz)">
-              <option value="f0">Fest 1080p 60</option>
-              <option value="f1">Fest 720p 60</option>
-              <option value="f2">Fest 720p 30</option>
-            </optgroup>
+          <select id="selHostMode" class="bar-select" aria-label="Qualitäts-Modus" title="Auto passt sich selbst an deine Leitung an und senkt bei Bedarf, damit dein Ping stabil bleibt. „Fest“ hält die gewählte Stufe immer – ohne Ping-Schutz.">
+            <option value="auto">Auto bis</option>
+            <option value="fixed">Fest</option>
+          </select>
+          <select id="selHostPreset" class="bar-select" aria-label="Auflösung und Bildrate" title="Auflösung und Bildrate">
+              <optgroup label="1080p">
+                <option value="1080x60">1080p · 60 FPS</option>
+                <option value="1080x30">1080p · 30 FPS</option>
+                <option value="1080x15">1080p · 15 FPS</option>
+              </optgroup>
+              <optgroup label="720p">
+                <option value="720x60">720p · 60 FPS</option>
+                <option value="720x30">720p · 30 FPS</option>
+                <option value="720x15">720p · 15 FPS</option>
+              </optgroup>
+              <optgroup label="540p">
+                <option value="540x60">540p · 60 FPS</option>
+                <option value="540x30">540p · 30 FPS</option>
+                <option value="540x15">540p · 15 FPS</option>
+              </optgroup>
+              <optgroup label="360p">
+                <option value="360x60">360p · 60 FPS</option>
+                <option value="360x30">360p · 30 FPS</option>
+                <option value="360x15">360p · 15 FPS</option>
+              </optgroup>
           </select>
           <label class="bar-check" title="Zuschauer dürfen den Mauszeiger und Zeichnungen auf deinem Bildschirm zeigen"><input id="chkAllowDraw" type="checkbox" checked /> Zeichnen erlauben</label>
           <button id="btnStopShare" class="bar-btn danger"><svg class="icon"><use href="#i-stop"/></svg><span>Beenden</span></button>
@@ -159,8 +171,20 @@
           <canvas id="drawCanvas" class="draw-canvas"></canvas>
           <div id="viewerBusy" class="viewer-busy"><div class="spinner"></div><span id="viewerBusyText">Verbinde …</span></div>
           <div id="viewStats" class="stats-overlay hidden"></div>
-          <div id="controlOverlay" class="control-overlay hidden">Fernsteuerung aktiv – <kbd>Strg</kbd>+<kbd>Alt</kbd>+<kbd>Shift</kbd>+<kbd>R</kbd> gibt Maus &amp; Tastatur frei</div>
+          <div id="controlOverlay" class="control-overlay hidden">Fernsteuerung aktiv – <kbd>F8</kbd> gibt Maus &amp; Tastatur frei (oder Maus an den oberen Rand)</div>
           <div id="viewHint" class="view-hint hidden"></div>
+          <button type="button" id="zoomBadge" class="zoom-badge hidden" title="Zurück auf „angepasst“ (oder Mausrad zurückdrehen)"></button>
+
+          <!-- Way out while controlling the friend's PC: slides in at the top edge, a small tab stays visible -->
+          <div id="ctlTop" class="ctl-top hidden">
+            <div id="ctlPanel" class="ctl-panel">
+              <span id="ctlText" class="ctl-text">Du steuerst den PC deines Freundes</span>
+              <button type="button" id="btnCtlRelease" class="bar-btn" title="Maus &amp; Tastatur wieder bei dir (F8)"><svg class="icon"><use href="#i-cursor"/></svg><span>Steuerung freigeben (F8)</span></button>
+              <button type="button" id="btnCtlWindowed" class="bar-btn" title="Vollbild verlassen (Esc)"><svg class="icon"><use href="#i-fullscreen"/></svg><span>Vollbild verlassen</span></button>
+              <button type="button" id="btnCtlLeave" class="bar-btn danger" title="Stream komplett verlassen"><svg class="icon"><use href="#i-leave"/></svg><span>Stream verlassen</span></button>
+            </div>
+            <button type="button" id="ctlTab" class="ctl-tab" title="Leiste ein-/ausblenden (F8 gibt die Steuerung frei)" aria-label="Leiste ein- oder ausblenden"><svg class="icon" viewBox="0 0 24 24"><path d="M7 10l5 5 5-5z" fill="currentColor"/></svg></button>
+          </div>
 
           <!-- Drawing options: tool, any colour, size -->
           <div id="drawPanel" class="draw-panel hidden" role="group" aria-label="Zeichen-Optionen">
@@ -185,7 +209,7 @@
                 <button type="button" id="btnImgReset" class="tool-btn" title="Zuschnitt des ausgewählten Bildes zurücksetzen">Zuschnitt zurücksetzen</button>
                 <button type="button" id="btnImgDelete" class="tool-btn" title="Ausgewähltes Bild entfernen (Entf)"><svg class="icon"><use href="#i-trash"/></svg>Entfernen</button>
               </div>
-              <p class="hint">Ziehen: verschieben · Ecke: Größe · Punkt oben: drehen (Umschalt = 15°-Schritte) · <strong>Alt + ziehen: zuschneiden</strong> · Mausrad: Größe</p>
+              <p class="hint">Ziehen: verschieben · Ecke: Größe · Punkt oben: drehen (Umschalt = 15°-Schritte) · <strong>Alt gedrückt halten + Ecke oder Kante ziehen: zuschneiden</strong> (nach außen ziehen nimmt es zurück; Alt + im Bild ziehen wählt einen Ausschnitt) · Mausrad: Größe</p>
             </div>
           </div>
 
@@ -196,17 +220,28 @@
             <button id="btnMute" class="bar-icon" title="Ton an/aus (nur bei dir)" aria-pressed="false"><svg class="icon"><use href="#i-vol"/></svg></button>
             <input id="viewVolume" class="slider volume" type="range" min="0" max="100" value="100" aria-label="Lautstärke – wirkt nur bei dir" title="Lautstärke – wirkt nur bei dir" />
             <span class="bar-sep"></span>
-            <div class="seg-mini" id="zoomSeg" role="group" aria-label="Zoom">
-              <button id="zoomFit" class="seg-mini-btn active" title="Bild einpassen">Anpassen</button>
-              <button id="zoomFill" class="seg-mini-btn" title="Fläche füllen (Rand wird abgeschnitten)">Füllen</button>
-              <button id="zoom100" class="seg-mini-btn" title="Originalgröße (100 %), mit Mausrad scrollen">100 %</button>
-            </div>
-            <select id="selQuality" class="bar-select" aria-label="Qualität" title="Maximale Qualität für dich">
-              <option value="0">Auto (beste)</option>
-              <option value="1">720p 60</option>
-              <option value="2">720p 30</option>
-              <option value="3">540p 30</option>
-              <option value="4">360p 30</option>
+            <select id="selQuality" class="bar-select" aria-label="Qualität" title="Höchste Qualität, die du bekommen möchtest. Auto = so gut wie die Leitung des Streamers erlaubt.">
+              <option value="auto">Auto (beste)</option>
+              <optgroup label="1080p">
+                <option value="1080x60">1080p · 60 FPS</option>
+                <option value="1080x30">1080p · 30 FPS</option>
+                <option value="1080x15">1080p · 15 FPS</option>
+              </optgroup>
+              <optgroup label="720p">
+                <option value="720x60">720p · 60 FPS</option>
+                <option value="720x30">720p · 30 FPS</option>
+                <option value="720x15">720p · 15 FPS</option>
+              </optgroup>
+              <optgroup label="540p">
+                <option value="540x60">540p · 60 FPS</option>
+                <option value="540x30">540p · 30 FPS</option>
+                <option value="540x15">540p · 15 FPS</option>
+              </optgroup>
+              <optgroup label="360p">
+                <option value="360x60">360p · 60 FPS</option>
+                <option value="360x30">360p · 30 FPS</option>
+                <option value="360x15">360p · 15 FPS</option>
+              </optgroup>
             </select>
             <span class="bar-sep"></span>
             <button id="btnCursor" class="bar-icon" title="Mauszeiger (M)" aria-pressed="false"><svg class="icon"><use href="#i-mouse"/></svg></button>
@@ -267,6 +302,7 @@
       </div>
       <div id="appList" class="app-list" role="group" aria-label="Anwendungen mit Audio"></div>
       <div class="meter-row"><span>Gesamtmix</span><div class="meter"><div id="masterMeter" class="meter-fill"></div></div></div>
+      <p id="appWarn" class="form-error hidden"></p>
       <p id="appNote" class="hint"></p>
       <div class="dialog-actions"><span class="spacer"></span><button id="btnAudioClose" class="btn btn-primary">Fertig</button></div>
     </div>

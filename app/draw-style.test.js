@@ -130,4 +130,35 @@ test('cropping twice accumulates, tiny selections are ignored', () => {
   assert.equal(S.cropTo(t, nat, 0.5, 0.5, 0.52, 0.52, 1000, 800), t);
 });
 
+test('crop edges can be dragged back out (uncrop), but never beyond the original picture', () => {
+  const nat = { w: 400, h: 300 };
+  const W = 1000;
+  const H = 800;
+  const t0 = S.cleanTransform({ x: 0.5, y: 0.5, w: 0.4, rot: 0.4 });
+  const cropped = S.cropTo(t0, nat, 0.5, 0, 1, 1, W, H); // left half cut away
+  near(cropped.cl, 0.5);
+  // drag the left edge back out by one full displayed width: restores the original picture exactly
+  const back = S.cropTo(cropped, nat, -1, 0, 1, 1, W, H, { expand: true });
+  near(back.cl, 0, 1e-9);
+  near(back.w, t0.w, 1e-9);
+  near(back.x, t0.x, 1e-9);
+  near(back.y, t0.y, 1e-9);
+  // dragging further out does not go past the original
+  const more = S.cropTo(cropped, nat, -5, 0, 1, 1, W, H, { expand: true });
+  near(more.cl, 0, 1e-9);
+  // without the expand option the edge stops at the current border (old behaviour)
+  const stay = S.cropTo(cropped, nat, -1, 0, 1, 1, W, H);
+  near(stay.cl, 0.5, 1e-9);
+});
+
+test('a single edge: only that side changes', () => {
+  const nat = { w: 400, h: 300 };
+  const t0 = S.cleanTransform({ x: 0.5, y: 0.5, w: 0.4 });
+  const n = S.cropTo(t0, nat, 0, 0, 1, 0.6, 1000, 800, { expand: true }); // bottom edge up to 60 %
+  near(n.cb, 0.4);
+  near(n.cl, 0);
+  near(n.cr, 0);
+  near(n.ct, 0);
+});
+
 console.log('\nall draw-style tests passed');

@@ -68,7 +68,7 @@ Auf einem VPS mit fester IP brauchst du das nicht.
 1. `ShareToFriends-Setup-2.0.0.exe` installieren (oder aus `app/` selbst bauen, siehe unten).
 2. **Einstellungen → Server-Adresse**: `wss://stf.meinedomain.de/ws` eintragen. Alle Freunde tragen dieselbe Adresse ein.
 3. **Streamer:** „Bildschirm teilen“ → Monitor oder Fenster wählen. Die App zeigt deine **ID** und dein **Passwort**; beides dem Freund geben.
-4. **Zuschauer:** ID und Passwort eintragen → „Verbinden“.
+4. **Zuschauer:** ID und Passwort eintragen → „Verbinden“. Das geht auch **schon vorher**: Teilt der Streamer noch nichts, wartet der Zuschauer im **Warteraum** (wie in einem Videocall, nur ohne Ton und Bild) und bekommt den Stream automatisch, sobald er startet; beendet der Streamer das Teilen, geht es zurück in den Warteraum.
 
 **Passwort und ID bleiben gespeichert**, auch nach einem Neustart der App. Das Passwort ändert sich nur, wenn du es willst:
 - **↻** erzeugt ein neues zufälliges Passwort,
@@ -80,8 +80,8 @@ Wer sich verbindet, bekommt es unter **„Zuletzt verbunden“** angezeigt: Die 
 
 **Stream (Discord-Stil)**
 - Fenster **oder** Monitor teilen; Wechsel während des Streams per Klick ohne Neuverbindung (gemessen ≈ 0,3 s).
-- Schwebende Stream-Leiste unten beim Zuschauer: Lautstärke, Zoom, Qualitätsdeckel, Mauszeiger/Zeichnen/Bilder, **Vollbild** (Taste **F** oder **F11**, Doppelklick aufs Bild; **Esc** beendet).
-- Vollautomatische Qualität: keine Bitraten- oder Codec-Regler. Die App nutzt die Überlastregelung von WebRTC und zusätzlich einen **Ping-Schutz**: Steigt die Latenz der Leitung des Hosts (Bufferbloat, z. B. weil ein Spiel Bandbreite braucht), drosselt der Stream selbst und geht danach von allein wieder auf die höchste Stufe (bis 1080p60). Der Zuschauer kann nur eine Obergrenze wählen („Auto“, 720p60, 540p30 …). Der **Streamer** wählt in seiner Leiste die Qualität: *Auto* (bis 1080p60, optional mit Obergrenze) oder eine **feste Stufe** (1080p60, 720p60, 720p30) – fest hält die Stufe immer, dann aber ohne Ping-Schutz.
+- Schwebende Stream-Leiste unten beim Zuschauer: Lautstärke, Zoom, Qualitätsdeckel, Mauszeiger/Zeichnen/Bilder, **Vollbild** (Taste **F** oder **F11**, Doppelklick aufs Bild; **Esc** beendet). Das Bild ist immer eingepasst; mit dem **Mausrad** zoomst du wie bei Discord an die Stelle unter dem Zeiger (bis 8×), mit gedrückter Maustaste verschiebst du den Ausschnitt, Zurückdrehen oder ein Klick auf die Anzeige oben rechts führt wieder auf „angepasst“.
+- Vollautomatische Qualität: Die App nutzt die Überlastregelung von WebRTC und zusätzlich einen **Ping-Schutz**: Steigt die Latenz der Leitung des Hosts (Bufferbloat, z. B. weil ein Spiel Bandbreite braucht), drosselt der Stream selbst und geht danach von allein wieder auf die höchste Stufe. Wählbar sind **alle Auflösungen (1080p, 720p, 540p, 360p) mit 60, 30 oder 15 FPS**: Der **Streamer** stellt „Auto bis …“ (Obergrenze, die App regelt darunter selbst) oder „Fest“ (die Stufe wird gehalten, dann ohne Ping-Schutz), jeder **Zuschauer** seine eigene Obergrenze; es gilt jeweils die niedrigere.
 - H.264 bevorzugt (Hardware-Encoder, falls vorhanden), VP8 als Rückfall; Opus-Stereo 128 kbit/s.
 
 **Audio**
@@ -91,11 +91,12 @@ Wer sich verbindet, bekommt es unter **„Zuletzt verbunden“** angezeigt: Die 
 
 **Fernsteuerung (optional, nur mit Bestätigung)**
 - Zuschauer klickt „Steuerung anfragen“ → beim Host erscheint immer ein Dialog: *„Zugriff für [Name] erlauben? [Ja] [Nein]“*.
+- **Immer ein Ausweg für den Zuschauer:** **F8** gibt Maus und Tastatur sofort frei; außerdem erscheint beim Bewegen der Maus an den oberen Rand eine Leiste (kleiner Pfeil bleibt sichtbar) mit „Steuerung freigeben“, „Vollbild verlassen“ und „Stream verlassen“.
 - Dauerhafte Leiste „Remote-Zugriff aktiv“ mit „Sofort beenden“; **F12** am Host-PC ist der Notaus (global per Low-Level-Tastaturhook erkannt, solange jemand fernsteuert).
 - Maus, Tastatur inkl. Windows-Taste/Alt+Tab/Strg+C/V, **Zwischenablage in beide Richtungen (Text und Bilder)**.
 - **Mauszeiger:** Dein Freund sieht deinen Zeiger als ganz normalen weißen Windows-Pfeil in Standardgröße (mit kleinem Namensschild) und kann so genau verfolgen, was du tust. Es gibt dafür keine Einstellungen. Taste **M**.
 - **Zeichnen** mit **Bleistift** (dünn), **Filzstift** (kräftig) oder **Marker** (breit, durchscheinend); **beliebige Farbe** (10 Vorgaben plus Farbwähler) und **Dicke** per Regler (Farbe und Dicke gelten für beide Modi). Zwei Modi: *verblasst* (Taste **P**) und *bleibt* (Taste **O**). **C** löscht deine Zeichnungen. Der Host hat einen Knopf **„Desktop leeren“**.
-- **Bilder:** Lege ein Bild (z. B. ein Meme) auf den Bildschirm des Streamers: Knopf in der Leiste, **Strg+V** (Bild aus der Zwischenablage) oder Drag & Drop (Taste **B**). Du kannst es **verschieben**, an den Ecken **skalieren**, am Punkt oben **drehen** (Umschalt = 15°-Schritte) und mit gedrückter **Alt-Taste ziehen, um zuzuschneiden**. Mausrad ändert die Größe, *Zuschnitt zurücksetzen* und *Entfernen* gibt es im Panel. Der Streamer sieht das Bild sofort auf seinem Desktop (es ist auch im Stream). Höchstens 8 Bilder je Zuschauer, jedes wird auf 1600 px verkleinert.
+- **Bilder:** Lege ein Bild (z. B. ein Meme) auf den Bildschirm des Streamers: Knopf in der Leiste, **Strg+V** (Bild aus der Zwischenablage) oder Drag & Drop (Taste **B**). Du kannst es **verschieben**, an den Ecken **skalieren**, am Punkt oben **drehen** (Umschalt = 15°-Schritte) und mit gedrückter **Alt-Taste an einer Ecke oder Kante ziehen, um frei zuzuschneiden** (nach außen ziehen nimmt den Zuschnitt zurück). Mausrad ändert die Größe, *Zuschnitt zurücksetzen* und *Entfernen* gibt es im Panel. Der Streamer sieht das Bild sofort auf seinem Desktop (es ist auch im Stream). Höchstens 8 Bilder je Zuschauer, jedes wird auf 1600 px verkleinert.
 
 **Sonstiges**
 - Automatischer Hintergrund-Updater (Banner erscheint nur, wenn gerade nicht gestreamt/zugesehen wird).
@@ -116,6 +117,8 @@ Wer sich verbindet, bekommt es unter **„Zuletzt verbunden“** angezeigt: Die 
 
 ## Grenzen (ehrlich)
 
+- **App-Ton von anderen Geräten:** Windows kann den Ton einer App nur abgreifen, wenn sie auf dem **Windows-Standard-Wiedergabegerät** spielt. Läuft sie über ein anderes Gerät (z. B. Spotify über „SteelSeries Sonar – Media“ oder einen GoXLR-Kanal), zeigt das Mischpult ein ⚠ mit der Anleitung; Lösung: im Windows-Lautstärkemixer das Ausgabegerät der App auf „Standard“ stellen.
+- **60 FPS:** Die Aufnahme nutzt die klassische Desktop-Aufnahme von Chromium, weil `getDisplayMedia` auf Windows bei etwa 53 Bildern pro Sekunde hängen bleibt. Das tatsächliche Ergebnis hängt trotzdem von Bildschirm, Encoder (Hardware-H.264) und Upload ab.
 - **Windows 10/11** (Prozess-Audio und Fernsteuerung nutzen Windows-APIs). macOS/Linux sind nicht vorgesehen.
 - Bei **mehreren Zuschauern** kodiert der Host den Stream **je Zuschauer** (WebRTC ohne SFU). 1–3 Zuschauer sind unproblematisch, mehr kostet CPU/Upload.
 - Ob **1080p60** erreicht wird, hängt von Encoder (Hardware-H.264 vs. Software), CPU/GPU und Upload ab. Bei reinem Software-Encoding fällt die App automatisch auf eine Stufe, die die Maschine halten kann.

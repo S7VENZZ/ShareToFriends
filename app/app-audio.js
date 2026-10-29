@@ -58,9 +58,37 @@ class AppAudio {
             title: String(r.title || '').slice(0, 80),
             active: Boolean(r.active),
             peak: Math.min(1, Math.max(0, Number(r.peak) || 0)),
+            onDefault: r.onDefault !== false, // false = plays on another device than the Windows default
+            deviceName: String(r.deviceName || '').slice(0, 80),
           });
         }
         resolve(result);
+      });
+    });
+  }
+
+  /** Minimized top-level windows (not capturable, so not in Electron's list): [{ hwnd, title, process }] */
+  minimizedWindows() {
+    if (!this.supported) return Promise.resolve([]);
+    return new Promise((resolve) => {
+      execFile(helperPath(), ['--windows'], { timeout: 4000, windowsHide: true, maxBuffer: 1 << 20 }, (err, stdout) => {
+        if (err) return resolve([]);
+        try {
+          const rows = JSON.parse(stdout);
+          resolve(Array.isArray(rows) ? rows.filter((r) => Number.isSafeInteger(r.hwnd) && typeof r.title === 'string') : []);
+        } catch {
+          resolve([]);
+        }
+      });
+    });
+  }
+
+  /** Restores the window if it is minimized, then gives it a moment to paint. */
+  restoreWindow(hwnd) {
+    if (!this.supported || !Number.isSafeInteger(hwnd) || hwnd <= 0) return Promise.resolve(false);
+    return new Promise((resolve) => {
+      execFile(helperPath(), ['--restore', String(hwnd)], { timeout: 4000, windowsHide: true }, (err) => {
+        setTimeout(() => resolve(!err), 450);
       });
     });
   }
