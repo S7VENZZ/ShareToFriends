@@ -1,6 +1,6 @@
 # Changelog
 
-## Unreleased
+## 2.0.4
 
 - **Zuschauer entfernen:** Der Knopf in der Zuschauerliste wirft jemanden wirklich raus. Er wird informiert, verbindet sich nicht mehr von selbst und wird 30 Minuten lang abgewiesen, wenn er es von Hand versucht.
 
