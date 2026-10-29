@@ -2317,12 +2317,31 @@
     mini.textContent = dl ? `Update lädt … ${u.percent || 0} %` : '';
   }
 
+  /**
+   * A downloaded update restarts the app by itself as soon as nothing is being shared or watched
+   * (and the user did not choose "Später" or switch automatic updates off).
+   */
+  function maybeAutoInstall() {
+    const u = updateUi.status;
+    if (u.state !== 'downloaded' || state.settings.autoUpdate === false || updateUi.dismissed === u.version || updateUi.installing || isBusy()) return;
+    updateUi.installing = true;
+    toast(`Version ${u.version} wird installiert – ShareToFriends startet gleich von selbst neu.`, 'ok', 8000);
+    setTimeout(() => {
+      if (isBusy()) {
+        updateUi.installing = false; // someone started sharing in the meantime: try again later
+        return;
+      }
+      stf.updaterInstall();
+    }, 6000);
+  }
+
   function renderUpdate(u) {
     const prev = updateUi.status.state;
     updateUi.status = u;
     $('updateStatusText').textContent = updateText(u);
     refreshUpdateBanner();
-    if (u.state === 'downloaded' && prev !== 'downloaded' && isBusy()) toast('Ein Update ist bereit und wird angeboten, sobald du nichts mehr teilst oder ansiehst.', 'ok', 6000);
+    maybeAutoInstall();
+    if (u.state === 'downloaded' && prev !== 'downloaded' && isBusy()) toast('Ein Update ist bereit. Die App startet von selbst neu, sobald du nichts mehr teilst oder ansiehst.', 'ok', 6000);
   }
 
   /* ================================================================== */
@@ -2374,6 +2393,7 @@
     stf.onUpdaterStatus(renderUpdate);
     stf.updaterGet().then(renderUpdate);
     $('btnUpdateNow').addEventListener('click', () => stf.updaterInstall());
+    setInterval(maybeAutoInstall, 15_000); // a friend left, the stream ended: the waiting update can go now
     $('btnUpdateLater').addEventListener('click', () => {
       updateUi.dismissed = updateUi.status.version || '';
       refreshUpdateBanner();

@@ -50,3 +50,16 @@ jobs:
             app/dist/ShareToFriends-Setup-*.exe.blockmap
             app/dist/latest.yml
           generate_release_notes: true
+
+      # Only the newest two versions stay on GitHub; older releases and their tags are removed.
+      - name: Remove old releases
+        shell: bash
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          gh release list --repo "$GITHUB_REPOSITORY" --limit 100 --json tagName,publishedAt \
+            --jq 'sort_by(.publishedAt) | reverse | .[2:] | .[].tagName' |
+          while read -r tag; do
+            [ -n "$tag" ] && gh release delete "$tag" --repo "$GITHUB_REPOSITORY" --yes --cleanup-tag
+          done
+          true

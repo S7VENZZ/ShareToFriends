@@ -1,6 +1,6 @@
 # Changelog
 
-## 2.0.2
+## 2.0.3
 
 - **Passwort bleibt gespeichert:** ID und Passwort überleben Neustarts (Passwort verschlüsselt mit dem Windows-Konto). Es ändert sich nur per **↻** (neues zufälliges) oder **✎** (eigenes, dauerhaftes Passwort, 10–64 Zeichen). Nach 5 Fehlversuchen werden neue Anmeldungen 10 Minuten gesperrt, statt das Passwort zu ändern.
 - **Zuletzt verbunden:** Freunde werden mit Name, ID und Passwort gespeichert (verschlüsselt, abschaltbar), ein Klick verbindet. Ändert sich das Passwort, fragt die App nach dem neuen.
@@ -8,6 +8,8 @@
 - **Zeichnen:** Bleistift, Filzstift oder Marker, beliebige Farbe und Dicke – für „verblasst“ und „bleibt“.
 - **Bilder:** per Knopf, Strg+V oder Drag & Drop auf den Bildschirm des Streamers legen; verschieben, skalieren, drehen und mit Alt + ziehen zuschneiden.
 - **Qualität für den Streamer:** Auto (optional mit Obergrenze) oder feste Stufe (1080p60 / 720p60 / 720p30).
+- **Updates starten die App selbst neu:** Ist ein Update geladen und du teilst/siehst gerade nichts, installiert die App es und startet automatisch neu (Banner „Später“ oder abgeschaltete Auto-Updates verhindern das). Läuft gerade ein Stream, wartet sie damit.
+- **GitHub bleibt aufgeräumt:** Nach jedem Release bleiben nur die neuesten zwei Versionen übrig.
 - Intern: verschlüsselter Speicher nutzt die neue asynchrone `safeStorage`-API von Electron 45.
 
 ## 2.0.1
