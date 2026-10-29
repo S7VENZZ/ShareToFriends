@@ -1,6 +1,6 @@
 # Changelog
 
-## Unreleased
+## 2.0.5
 
 - **Update-Einstellungen vereinfacht:** Keine Update-Adresse mehr zum Eintragen, die App nutzt automatisch die GitHub-Releases. Die Einstellungen zeigen Version, „Zuletzt geprüft“ und Status; „Automatisch aktualisieren“ lässt sich an- und ausschalten. Geprüft wird beim Start und danach alle 10 Minuten.
 
