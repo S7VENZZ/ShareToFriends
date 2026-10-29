@@ -171,9 +171,16 @@
         this.close('auth-fail', false);
         return;
       }
+      this.name = cleanName(d.name);
+      this.vid = typeof d.vid === 'string' && /^\d{9}$/.test(d.vid) ? d.vid : '';
+      if (this.hooks.isBanned && this.hooks.isBanned(this)) {
+        // removed by the streamer a short while ago
+        this.sig.relay(this.sid, { k: 'refuse', reason: 'kicked' });
+        this.close('kicked', false);
+        return;
+      }
       this.authed = true;
       clearTimeout(this.authTimer);
-      this.name = cleanName(d.name);
       this.sessionKey = await A.sessionKey(base, this.nH, d.nV);
       this.sig.relay(this.sid, { k: 'auth-ok', mac: await A.mac(base, `H|${this.nH}|${d.nV}`) });
       this.hooks.onAuthOk(this);
@@ -363,7 +370,7 @@
       this.nH = d.nH;
       this.nV = A.b64(A.randomBytes(16));
       const name = cleanName(this.name);
-      this.sig.relay(this.sid, { k: 'auth', nV: this.nV, name, mac: await A.mac(this.baseKey, `V|${this.nH}|${this.nV}|${name}`) });
+      this.sig.relay(this.sid, { k: 'auth', nV: this.nV, name, vid: typeof this.selfId === 'string' ? this.selfId : undefined, mac: await A.mac(this.baseKey, `V|${this.nH}|${this.nV}|${name}`) });
     }
 
     async handleAuthOk(d) {

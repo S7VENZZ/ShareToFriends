@@ -1,5 +1,9 @@
 # Changelog
 
+## Unreleased
+
+- **Zuschauer entfernen:** Der Knopf in der Zuschauerliste wirft jemanden wirklich raus. Er wird informiert, verbindet sich nicht mehr von selbst und wird 30 Minuten lang abgewiesen, wenn er es von Hand versucht.
+
 ## 2.0.3
 
 - **Passwort bleibt gespeichert:** ID und Passwort überleben Neustarts (Passwort verschlüsselt mit dem Windows-Konto). Es ändert sich nur per **↻** (neues zufälliges) oder **✎** (eigenes, dauerhaftes Passwort, 10–64 Zeichen). Nach 5 Fehlversuchen werden neue Anmeldungen 10 Minuten gesperrt, statt das Passwort zu ändern.

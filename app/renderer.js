@@ -712,6 +712,7 @@
     maxTier: 0, // quality ceiling chosen by the streamer (0 = automatic, as high as the line allows)
     forceTier: null, // or one pinned tier
     lockUntil: 0, // after too many wrong passwords new logins are blocked until then
+    banned: new Map(), // viewers the streamer removed: 'id:123456789' or 'name:xyz' -> until (ms)
   };
 
   async function captureSource(id) {
@@ -845,6 +846,7 @@
           refreshUpdateBanner();
         },
         onAuthFail: () => registerAuthFailure(),
+        isBanned: (p) => isBannedViewer(p),
         onOpen: (p) => {
           p.sendCtl({ t: 'info', name: state.settings.displayName || 'Host', allowDraw: host.allowDraw, source: currentSourceName(host.sourceId) });
         },
@@ -882,6 +884,26 @@
     } else toast('Jemand hat ein falsches Passwort eingegeben.', 'error', 4000);
   }
 
+  const KICK_BAN_MS = 30 * 60_000;
+
+  function banKey(p) {
+    return p.vid ? `id:${p.vid}` : `name:${String(p.name).toLowerCase()}`;
+  }
+
+  function isBannedViewer(p) {
+    const until = host.banned.get(banKey(p)) || 0;
+    if (until && until < Date.now()) host.banned.delete(banKey(p));
+    return until > Date.now();
+  }
+
+  /** Removes a viewer for good (for a while): he is told, does not reconnect by himself and is refused if he tries. */
+  function kickViewer(p) {
+    host.banned.set(banKey(p), Date.now() + KICK_BAN_MS);
+    p.sendCtl({ t: 'kick' });
+    toast(`${p.name} wurde entfernt und kann sich 30 Minuten lang nicht wieder verbinden.`, 'ok', 5000);
+    setTimeout(() => p.close('kicked'), 400); // let the message go out first
+  }
+
   function renderViewerList() {
     const list = $('viewerList');
     list.replaceChildren();
@@ -908,7 +930,7 @@
       kick.className = 'icon-btn';
       kick.title = 'Verbindung trennen';
       kick.innerHTML = '<svg class="icon"><use href="#i-leave"/></svg>';
-      kick.addEventListener('click', () => p.close('kicked'));
+      kick.addEventListener('click', () => kickViewer(p));
       row.append(av, meta, kick);
       list.appendChild(row);
     }
@@ -1097,6 +1119,7 @@
     'not-sharing': 'Dein Freund teilt gerade nichts. Er muss zuerst „Bildschirm teilen“ klicken.',
     'host-busy': 'Dein Freund hat schon die maximale Zahl an Zuschauern.',
     'rate-limit': 'Zu viele Versuche – bitte kurz warten.',
+    kicked: 'Der Streamer hat dich entfernt. Du kannst dich vorerst nicht wieder verbinden.',
     timeout: 'Keine Antwort. Prüfe ID und Internetverbindung.',
     'signal-offline': 'Der Vermittlungs-Server ist nicht erreichbar.',
     'host-not-verified': 'Der Gegenstelle konnte nicht vertraut werden (falsches Passwort oder manipulierte Verbindung).',
@@ -1137,6 +1160,7 @@
       hostId: viewer.creds.hostId,
       password: viewer.creds.password,
       name: state.settings.displayName || 'Gast',
+      selfId: state.myId,
       getIce: () => state.ice,
       hooks: {
         onTrack: (stream) => {
@@ -1167,7 +1191,7 @@
     } catch (err) {
       viewer.connecting = false;
       const code = errText(err);
-      if (isRetry && !['wrong-password'].includes(code)) throw err; // the retry loop handles it
+      if (isRetry && !['wrong-password', 'kicked'].includes(code)) throw err; // the retry loop handles it
       const failedId = viewer.creds && viewer.creds.hostId;
       viewer.peer = null;
       viewer.creds = null;
@@ -1250,6 +1274,14 @@
 
   function onViewerMessage(msg) {
     switch (msg.t) {
+      case 'kick':
+        // removed by the streamer: leave for good, no automatic reconnect
+        viewer.creds = null;
+        leaveViewer();
+        $('connectError').textContent = ERRORS.kicked;
+        $('connectError').classList.remove('hidden');
+        toast('Der Streamer hat dich aus dem Stream entfernt.', 'error', 8000);
+        break;
       case 'info':
         if (typeof msg.name === 'string') {
           viewer.info.name = msg.name;
