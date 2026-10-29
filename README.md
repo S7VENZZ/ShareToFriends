@@ -46,6 +46,16 @@ Es reicht ein kleiner VPS (1 vCPU / 1 GB RAM) mit Debian/Ubuntu und Docker.
 
 Auf dem Heimnetz/Router ist **nichts** zu tun.
 
+### Läuft der Server zu Hause? Wechselnde IP automatisch nachführen
+
+Hat dein Anschluss keine feste IP (DSL, die sich nachts ändert), zeigt der DNS-Eintrag irgendwann ins Leere und die App meldet „Verbinde …“. Mit Cloudflare als DNS geht das automatisch:
+
+1. Cloudflare → *My Profile → API Tokens → Create Token* → Vorlage **Edit zone DNS**, nur für deine Domain. Token kopieren.
+2. Auf dem Server in `server/.env` eine Zeile ergänzen: `CF_API_TOKEN=<dein Token>`
+3. `./setup.sh <domain>` erneut ausführen. Ab jetzt läuft der Container `stf-ddns` und setzt den A-Eintrag selbst auf die aktuelle IP (die Wolke bleibt grau).
+
+Auf einem VPS mit fester IP brauchst du das nicht.
+
 ### Was der Server kann (und was nicht)
 
 - Registriert die 9-stellige ID jedes Hosts, leitet Verbindungswünsche und die WebRTC-Aushandlung (SDP/ICE) weiter.

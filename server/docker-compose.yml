@@ -47,6 +47,26 @@ services:
       driver: json-file
       options: { max-size: "10m", max-file: "3" }
 
+  # Only when the server runs at home behind a changing public IP (DSL): keeps the Cloudflare DNS record up to date.
+  # Switched on by setup.sh when CF_API_TOKEN is set in .env (token with "Zone > DNS > Edit" for your domain).
+  ddns:
+    profiles: ["ddns"]
+    image: favonia/cloudflare-ddns:1
+    container_name: stf-ddns
+    restart: unless-stopped
+    network_mode: host
+    read_only: true
+    cap_drop: [all]
+    security_opt: [no-new-privileges:true]
+    environment:
+      - CLOUDFLARE_API_TOKEN=${CF_API_TOKEN:-}
+      - DOMAINS=${DOMAIN:-}
+      - PROXIED=false
+      - IP6_PROVIDER=none
+    logging:
+      driver: json-file
+      options: { max-size: "10m", max-file: "3" }
+
 volumes:
   caddy_data:
   caddy_config:
