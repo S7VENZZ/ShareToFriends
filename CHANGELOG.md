@@ -1,6 +1,6 @@
 # Changelog
 
-## Unreleased
+## 2.0.7
 
 - **Alles läuft über den eigenen Server:** Vermittlung, TURN, TLS **und die App-Updates**. Die App fragt für Updates nur noch `https://<server>/updates` ab (aus der Server-Adresse abgeleitet), nicht mehr GitHub. Der Raspberry Pi wird nicht mehr gebraucht.
 - Neuer Dienst **updates-sync** im Server-Paket: holt die neueste Version aus dem GitHub-Release (dort baut GitHub Actions weiter), prüft die SHA-512-Prüfsumme und veröffentlicht sie erst dann; nur die neuesten zwei Versionen bleiben.
