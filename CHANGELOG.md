@@ -1,6 +1,6 @@
 # Changelog
 
-## Unreleased
+## 2.0.6
 
 - **Echte 60 FPS:** Die Bildschirmaufnahme (`getDisplayMedia`) war auf Windows bei etwa 53 Bildern pro Sekunde gedeckelt, egal was angefordert wurde (gemessen, auch ohne Encoder). Die App nutzt jetzt die klassische Desktop-Aufnahme und kommt auf 60 FPS (gemessen: 59,8 FPS bei 1080p mit dem NVIDIA-Hardware-Encoder, vorher 52). `getDisplayMedia` bleibt als Rückfall.
 - **Qualität frei wählbar:** 1080p, 720p, 540p und 360p jeweils mit 60, 30 oder 15 FPS, für den Streamer („Auto bis …“ oder „Fest“) und für jeden Zuschauer (Obergrenze).
