@@ -20,41 +20,36 @@ Zu Hause wird **kein einziger Router-Port geöffnet**. Ein kleiner VPS vermittel
 
 ## 1. Server auf dem VPS einrichten (einmalig, ca. 10 Minuten)
 
-Es reicht ein kleiner VPS (1 vCPU / 1 GB RAM) mit Debian/Ubuntu und Docker.
+Der Server läuft auf einem VPS / Root-Server mit **fester IP** (1 vCPU / 1 GB RAM reichen, Debian/Ubuntu). Er macht drei Dinge: Verbindungen vermitteln (Signaling), als TURN-Rückfall dienen und die **App-Updates ausliefern**. Zu Hause muss nichts laufen und nichts geöffnet sein.
 
-1. Eine (Sub-)Domain anlegen, z. B. `stf.meinedomain.de`, mit einem **A-Eintrag auf die VPS-IP**.
-2. In der Cloud-Firewall des VPS **eingehend** freigeben:
+1. **DNS:** Bei deinem DNS-Anbieter (z. B. Cloudflare) den A-Eintrag der Server-Domain (`stf.meinedomain.de`) auf die **IP des VPS** setzen. Bei Cloudflare: Proxy aus (graue Wolke, „Nur DNS“).
+2. **Firewall** des VPS (beim Anbieter und/oder `ufw`) **eingehend** freigeben:
 
    | Port | Protokoll | Zweck |
    |---|---|---|
-   | 80, 443 | TCP | Zertifikat (Let's Encrypt) und Signaling über `wss://` |
+   | 22 | TCP | SSH (nur für dich) |
+   | 80, 443 | TCP | Zertifikat (Let's Encrypt), Signaling über `wss://`, Update-Downloads |
    | 3478 | UDP + TCP | STUN / TURN |
    | 49152–49252 | UDP | TURN-Relay (nur als Rückfall) |
 
-3. Auf dem VPS:
+3. **Installieren** (auf dem VPS, per SSH):
 
    ```bash
-   curl -fsSL https://get.docker.com | sh       # falls Docker fehlt
-   # Ordner "server/" auf den VPS kopieren (scp/rsync), dann:
-   cd server
+   curl -fsSL https://get.docker.com | sh            # falls Docker fehlt
+   apt-get install -y unzip                          # falls unzip fehlt
+   unzip ShareToFriends-Server.zip -d stf && cd stf/server
    chmod +x setup.sh
    ./setup.sh stf.meinedomain.de
    ```
 
-   `setup.sh` erzeugt ein zufälliges TURN-Geheimnis (`.env`), schreibt die coturn-Konfiguration und startet Signaling, coturn und Caddy.
-4. Prüfen: `https://stf.meinedomain.de/health` muss `{"ok":true,…}` liefern.
+   `setup.sh` erzeugt ein zufälliges TURN-Geheimnis (`.env`), schreibt die coturn-Konfiguration und startet vier Container: **Signaling**, **coturn**, **Caddy** (TLS + Update-Downloads) und **updates-sync** (holt neue Versionen).
+4. **Prüfen:** `https://stf.meinedomain.de/health` muss `{"ok":true,…}` liefern, `https://stf.meinedomain.de/updates/latest.yml` nach wenigen Minuten die aktuelle Version zeigen.
 
-Auf dem Heimnetz/Router ist **nichts** zu tun.
+### Server absichern (empfohlen)
 
-### Läuft der Server zu Hause? Wechselnde IP automatisch nachführen
-
-Hat dein Anschluss keine feste IP (DSL, die sich nachts ändert), zeigt der DNS-Eintrag irgendwann ins Leere und die App meldet „Verbinde …“. Mit Cloudflare als DNS geht das automatisch:
-
-1. Cloudflare → *My Profile → API Tokens → Create Token* → Vorlage **Edit zone DNS**, nur für deine Domain. Token kopieren.
-2. Auf dem Server in `server/.env` eine Zeile ergänzen: `CF_API_TOKEN=<dein Token>`
-3. `./setup.sh <domain>` erneut ausführen. Ab jetzt läuft der Container `stf-ddns` und setzt den A-Eintrag selbst auf die aktuelle IP (die Wolke bleibt grau).
-
-Auf einem VPS mit fester IP brauchst du das nicht.
+- Root-Passwort ändern (`passwd`) und **SSH-Schlüssel** statt Passwort nutzen: `ssh-keygen -t ed25519` auf dem PC, `ssh-copy-id root@<IP>`, danach in `/etc/ssh/sshd_config` `PasswordAuthentication no` setzen und `systemctl restart ssh` (erst prüfen, dass die Anmeldung per Schlüssel klappt!).
+- `apt-get install -y ufw fail2ban unattended-upgrades`, dann `ufw allow 22/tcp`, `ufw allow 80,443/tcp`, `ufw allow 3478`, `ufw allow 49152:49252/udp`, `ufw enable`.
+- Passwörter oder Token **nie** im Chat oder in Dateien im Repository teilen.
 
 ### Was der Server kann (und was nicht)
 
@@ -138,17 +133,18 @@ npm run dist             # Installer nach app/dist/
 
 Der Audio-Helfer `helper/StfAudioCapture.exe` wird mit `npm run build:helper` aus `helper/*.cs` gebaut (benötigt das .NET-Framework-Compilerwerkzeug `csc.exe`, das bei Windows dabei ist) und vom Installer mitgeliefert.
 
-### Updates über GitHub
+### Updates über deinen Server
 
-Die App sucht standardmäßig unter `https://github.com/S7VENZZ/ShareToFriends/releases/latest` nach neuen Versionen und installiert sie im Hintergrund. Das Repository muss dafür **öffentlich** sein.
+Die App fragt für Updates **nur deinen Server** ab (`https://<deine-domain>/updates`, abgeleitet aus der Server-Adresse) und installiert sie im Hintergrund. Sie spricht nie mit GitHub.
 
-Eine neue Version veröffentlichst du mit einem Befehl:
+So kommt eine neue Version zu den Apps:
 
-```powershell
-.elease.ps1 2.0.2
-```
+1. `.\release.ps1 2.0.8` auf dem PC: setzt die Version, führt die Tests aus, committet, setzt das Tag und pusht.
+2. **GitHub Actions** ([.github/workflows/release.yml](.github/workflows/release.yml)) baut den Windows-Installer und legt ihn mit `latest.yml` als Release ab (dort bleiben nur die neuesten zwei).
+3. Der Dienst **updates-sync** auf dem Server holt die neue Version innerhalb von höchstens 5 Minuten, **prüft die SHA-512-Prüfsumme** des Installers gegen `latest.yml`, stellt Installer und Blockmap bereit und die `latest.yml` zuletzt. Auf dem Server bleiben nur die neuesten zwei Versionen.
+4. Die Apps laden das Update im Hintergrund und **starten sich selbst neu**, sobald nichts geteilt oder angesehen wird.
 
-Das Skript setzt die Version, führt die Tests aus, committet, setzt das Tag `v2.0.2` und pusht. GitHub Actions ([.github/workflows/release.yml](.github/workflows/release.yml)) baut daraufhin den Installer und legt ihn mit `latest.yml` als Release ab. Wenige Minuten später laden alle installierten Apps das Update im Hintergrund und **starten sich selbst neu**, sobald nichts mehr geteilt oder angesehen wird (während eines Streams wartet die App). Nach dem Build bleiben auf GitHub nur die **neuesten zwei Versionen** erhalten, ältere Releases und ihre Tags werden automatisch gelöscht.
+Stimmt die Prüfsumme nicht oder ist GitHub nicht erreichbar, bleibt auf dem Server alles, wie es war; es wird beim nächsten Durchlauf erneut versucht. Logs: `docker logs stf-updates-sync`.
 
 In den **Einstellungen → Updates** siehst du die installierte Version, wann zuletzt geprüft wurde und ob ein Update bereitsteht. Dort schaltest du auch „Automatisch aktualisieren“ an oder aus und kannst jederzeit „Jetzt prüfen“ klicken. Geprüft wird beim Start und danach alle 10 Minuten. Eine Update-Adresse muss man nicht eintragen.
 
@@ -158,6 +154,7 @@ In den **Einstellungen → Updates** siehst du die installierte Version, wann zu
 cd server
 npm ci
 node test.js             # Signaling-Tests (Authentifizierung, Rate-Limits, Relay)
+node update-sync.test.js # Update-Spiegel (Prüfsumme, Aufräumen, nur bekannte Dateinamen)
 ```
 
 ## Lizenz

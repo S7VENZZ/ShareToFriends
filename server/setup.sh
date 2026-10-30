@@ -29,12 +29,7 @@ sed "s|__TURN_SECRET__|${TURN_SECRET}|g; s|__DOMAIN__|${DOMAIN}|g" turnserver.co
 mkdir -p updates
 
 docker compose pull coturn caddy
-PROFILES=""
-if grep -q '^CF_API_TOKEN=.\+' .env; then
-  PROFILES="--profile ddns"
-  echo "Dynamische IP: der DDNS-Dienst hält ${DOMAIN} automatisch aktuell."
-fi
-docker compose $PROFILES up -d --build
+docker compose up -d --build
 
 echo
 echo "==================== ShareToFriends-Server läuft ===================="
@@ -44,5 +39,6 @@ echo " Cloud-Firewall des VPS freigeben (Eingehend):"
 echo "   TCP 80, TCP 443          (Zertifikat + Signaling)"
 echo "   UDP/TCP 3478             (STUN/TURN)"
 echo "   UDP 49152-49252          (TURN-Relay)"
+echo " Update-Feed der Apps:       https://${DOMAIN}/updates  (wird automatisch befüllt)"
 echo " Zu Hause (Router/Heimnetz): nichts."
 echo "====================================================================="

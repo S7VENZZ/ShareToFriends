@@ -1,5 +1,10 @@
 # Changelog
 
+## Unreleased
+
+- **Alles läuft über den eigenen Server:** Vermittlung, TURN, TLS **und die App-Updates**. Die App fragt für Updates nur noch `https://<server>/updates` ab (aus der Server-Adresse abgeleitet), nicht mehr GitHub. Der Raspberry Pi wird nicht mehr gebraucht.
+- Neuer Dienst **updates-sync** im Server-Paket: holt die neueste Version aus dem GitHub-Release (dort baut GitHub Actions weiter), prüft die SHA-512-Prüfsumme und veröffentlicht sie erst dann; nur die neuesten zwei Versionen bleiben.
+
 ## 2.0.6
 
 - **Echte 60 FPS:** Die Bildschirmaufnahme (`getDisplayMedia`) war auf Windows bei etwa 53 Bildern pro Sekunde gedeckelt, egal was angefordert wurde (gemessen, auch ohne Encoder). Die App nutzt jetzt die klassische Desktop-Aufnahme und kommt auf 60 FPS (gemessen: 59,8 FPS bei 1080p mit dem NVIDIA-Hardware-Encoder, vorher 52). `getDisplayMedia` bleibt als Rückfall.

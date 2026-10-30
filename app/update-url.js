@@ -5,11 +5,11 @@
  * without loading electron-updater.
  *
  *  - https:// only (http:// is accepted for loopback hosts, for local testing)
- *  - shorthand github:owner/repo -> https://github.com/owner/repo/releases/latest/download
+ *  - shorthand github:owner/repo -> https://github.com/owner/repo/releases/latest/download (still understood, no longer used by default)
  */
 
-/** Where installed apps look for new versions unless the user sets another URL in the settings. */
-const DEFAULT_UPDATE_SOURCE = 'github:S7VENZZ/ShareToFriends';
+/** The update server of the project; used when the signaling server address does not give one. */
+const DEFAULT_UPDATE_SOURCE = 'https://stf.s7venz.cloud/updates';
 
 const LOOPBACK_HOSTS = new Set(['localhost', '127.0.0.1', '[::1]']);
 
@@ -34,4 +34,18 @@ function normalizeUpdateUrl(raw) {
   return url.toString().replace(/\/+$/, '');
 }
 
-module.exports = { normalizeUpdateUrl, DEFAULT_UPDATE_SOURCE };
+/**
+ * Updates are served by the same server as the signaling: wss://stf.example.com/ws -> https://stf.example.com/updates.
+ * @returns {string} '' when the address is not a wss:// URL
+ */
+function updateUrlFromServer(serverUrl) {
+  try {
+    const u = new URL(String(serverUrl || ''));
+    if (u.protocol === 'wss:' && u.hostname) return `https://${u.host}/updates`;
+  } catch {
+    /* no server address yet */
+  }
+  return '';
+}
+
+module.exports = { normalizeUpdateUrl, updateUrlFromServer, DEFAULT_UPDATE_SOURCE };

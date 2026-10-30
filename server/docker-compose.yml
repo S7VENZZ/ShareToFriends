@@ -2,7 +2,7 @@
 #
 #   ./setup.sh meinname.example.com      erzeugt Geheimnisse (.env), coturn-Konfiguration und startet alles
 #
-# Der VPS vermittelt nur den Verbindungsaufbau (Signaling) und dient als TURN-Fallback.
+# Der Server vermittelt den Verbindungsaufbau (Signaling), ist TURN-Fallback und liefert die App-Updates aus.
 # Zu Hause werden KEINE Ports geöffnet; die Streams laufen direkt von PC zu PC.
 
 services:
@@ -47,22 +47,27 @@ services:
       driver: json-file
       options: { max-size: "10m", max-file: "3" }
 
-  # Only when the server runs at home behind a changing public IP (DSL): keeps the Cloudflare DNS record up to date.
-  # Switched on by setup.sh when CF_API_TOKEN is set in .env (token with "Zone > DNS > Edit" for your domain).
-  ddns:
-    profiles: ["ddns"]
-    image: favonia/cloudflare-ddns:1
-    container_name: stf-ddns
+  # Update mirror: copies the newest release (built by GitHub Actions) into ./updates, verified by its SHA-512.
+  # The apps download their updates from https://<domain>/updates and never talk to GitHub.
+  updates-sync:
+    image: node:22-alpine
+    container_name: stf-updates-sync
     restart: unless-stopped
-    network_mode: host
-    read_only: true
-    cap_drop: [all]
-    security_opt: [no-new-privileges:true]
+    working_dir: /app
+    command: ["node", "update-sync.js"]
     environment:
-      - CLOUDFLARE_API_TOKEN=${CF_API_TOKEN:-}
-      - DOMAINS=${DOMAIN:-}
-      - PROXIED=false
-      - IP6_PROVIDER=none
+      - UPDATES_DIR=/srv/updates
+      - GITHUB_REPO=${GITHUB_REPO:-S7VENZZ/ShareToFriends}
+      - INTERVAL_MIN=${SYNC_INTERVAL_MIN:-5}
+      - KEEP_VERSIONS=2
+      - GITHUB_TOKEN=${GITHUB_TOKEN:-}
+    volumes:
+      - ./update-sync.js:/app/update-sync.js:ro
+      - ./updates:/srv/updates
+    read_only: true
+    tmpfs: ["/tmp"]
+    cap_drop: [all]
+    security_opt: ["no-new-privileges:true"]
     logging:
       driver: json-file
       options: { max-size: "10m", max-file: "3" }

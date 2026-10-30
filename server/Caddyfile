@@ -10,11 +10,12 @@
 		reverse_proxy 127.0.0.1:8787
 	}
 
-	# App-Updates (electron-updater): latest.yml + Installer in ./updates ablegen
+	# App-Updates (electron-updater): ./updates wird vom Dienst updates-sync aus dem neuesten Release befüllt
 	handle_path /updates/* {
 		root * /srv/updates
 		@meta path *.yml *.yaml
-		header @meta Cache-Control "no-cache"
+		header @meta Cache-Control "no-cache, no-store, must-revalidate"
+		header X-Content-Type-Options nosniff
 		file_server
 	}
 

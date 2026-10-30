@@ -17,7 +17,7 @@ const fs = require('fs');
 const crypto = require('crypto');
 const { pathToFileURL } = require('url');
 const { RemoteController } = require('./remote-controller');
-const { normalizeUpdateUrl, DEFAULT_UPDATE_SOURCE } = require('./update-url');
+const { normalizeUpdateUrl, updateUrlFromServer, DEFAULT_UPDATE_SOURCE } = require('./update-url');
 const { KeyHook } = require('./key-hook');
 const { AppAudio } = require('./app-audio');
 const { DrawOverlay } = require('./draw-overlay');
@@ -94,9 +94,10 @@ function cleanServerUrl(value) {
   return url.toString();
 }
 
-/** Updates come from the GitHub releases of the project (STF_UPDATE_URL only exists for local testing). */
-function effectiveUpdateUrl() {
-  return normalizeUpdateUrl(process.env.STF_UPDATE_URL || DEFAULT_UPDATE_SOURCE);
+/** Updates come from the same server as the signaling (STF_UPDATE_URL only exists for local testing). */
+function effectiveUpdateUrl(settings) {
+  if (process.env.STF_UPDATE_URL) return normalizeUpdateUrl(process.env.STF_UPDATE_URL);
+  return updateUrlFromServer(settings && settings.serverUrl) || normalizeUpdateUrl(DEFAULT_UPDATE_SOURCE);
 }
 
 function publicSettings(settings) {
