@@ -8,6 +8,18 @@
  *  - shorthand github:owner/repo -> https://github.com/owner/repo/releases/latest/download (still understood, no longer used by default)
  */
 
+/** The signaling server every installation uses. Fixed: it cannot be changed or even seen in the app. */
+const FIXED_SERVER_URL = 'wss://stf.s7venz.cloud/ws';
+
+/**
+ * Which signaling server to use. Installed (packaged) apps always use the fixed one; only an unpackaged
+ * development checkout may point at a local server through STF_SERVER_URL (for the automated tests).
+ */
+function resolveServerUrl(isPackaged, envValue) {
+  if (!isPackaged && typeof envValue === 'string' && /^wss?:\/\/(localhost|127\.0\.0\.1|\[::1\])(:\d+)?(\/.*)?$/.test(envValue.trim())) return envValue.trim();
+  return FIXED_SERVER_URL;
+}
+
 /** The update server of the project; used when the signaling server address does not give one. */
 const DEFAULT_UPDATE_SOURCE = 'https://stf.s7venz.cloud/updates';
 
@@ -48,4 +60,4 @@ function updateUrlFromServer(serverUrl) {
   return '';
 }
 
-module.exports = { normalizeUpdateUrl, updateUrlFromServer, DEFAULT_UPDATE_SOURCE };
+module.exports = { normalizeUpdateUrl, updateUrlFromServer, resolveServerUrl, FIXED_SERVER_URL, DEFAULT_UPDATE_SOURCE };

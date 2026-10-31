@@ -60,16 +60,15 @@ Der Server läuft auf einem VPS / Root-Server mit **fester IP** (1 vCPU / 1 GB R
 
 ## 2. App installieren und verbinden
 
-1. `ShareToFriends-Setup-2.0.0.exe` installieren (oder aus `app/` selbst bauen, siehe unten).
-2. **Einstellungen → Server-Adresse**: `wss://stf.meinedomain.de/ws` eintragen. Alle Freunde tragen dieselbe Adresse ein.
-3. **Streamer:** „Bildschirm teilen“ → Monitor oder Fenster wählen. Die App zeigt deine **ID** und dein **Passwort**; beides dem Freund geben.
-4. **Zuschauer:** ID und Passwort eintragen → „Verbinden“. Das geht auch **schon vorher**: Teilt der Streamer noch nichts, wartet der Zuschauer im **Warteraum** (wie in einem Videocall, nur ohne Ton und Bild) und bekommt den Stream automatisch, sobald er startet; beendet der Streamer das Teilen, geht es zurück in den Warteraum.
+1. `ShareToFriends-Setup-<Version>.exe` installieren (oder aus `app/` selbst bauen, siehe unten). Beim ersten Start gibst du dir einen **Namen**.
+2. Der Vermittlungs-Server ist **fest in der App eingebaut** (`wss://stf.s7venz.cloud/ws`): Er lässt sich nicht ändern und wird nirgends angezeigt. Wer einen eigenen Server betreiben will, ändert `FIXED_SERVER_URL` in `app/update-url.js` und baut die App neu.
+3. Auf dem Startbildschirm wählst du einen von drei Wegen:
+   - **Bildschirm teilen:** Du streamst. Deine **ID** und dein **Passwort** stehen links (auch unter *Einstellungen → Profil*) und gehören deinen Freunden.
+   - **Zuschauen:** ID und Passwort des Freundes eingeben und mit **Enter** oder dem Knopf verbinden. Teilt er noch nichts, wartest du im **Warteraum**.
+   - **Fernsteuern:** wie Zuschauen, aber die App fragt direkt nach dem Verbinden nach Zugriff; sobald dein Freund „Ja“ sagt, übernimmst du die Steuerung (**F8** gibt sie jederzeit frei).
+4. Bei **„Zuletzt verbunden“** reicht ein Klick, um dich erneut zu verbinden; der kleine Zeiger-Knopf daneben verbindet und steuert gleich.
 
-**Passwort und ID bleiben gespeichert**, auch nach einem Neustart der App. Das Passwort ändert sich nur, wenn du es willst:
-- **↻** erzeugt ein neues zufälliges Passwort,
-- **✎** lässt dich ein **eigenes, dauerhaftes Passwort** festlegen (10–64 Zeichen), das du deinen Freunden gibst.
-
-Wer sich verbindet, bekommt es unter **„Zuletzt verbunden“** angezeigt: Die App merkt sich Name, ID und Passwort (verschlüsselt mit deinem Windows-Konto, abschaltbar mit „Passwort merken“), und ein Klick genügt für die nächste Verbindung. Ändert der Streamer sein Passwort, fragt die App nach dem neuen. Falsche Passwörter werden abgewiesen; nach 5 Fehlversuchen innerhalb von 10 Minuten sind neue Anmeldungen 10 Minuten gesperrt (das Passwort bleibt dabei unverändert).
+Das Passwort ändert sich per Knopfdruck (↻) jederzeit; die ID bleibt gleich.
 
 ## Funktionen
 
@@ -135,7 +134,7 @@ Der Audio-Helfer `helper/StfAudioCapture.exe` wird mit `npm run build:helper` au
 
 ### Updates über deinen Server
 
-Die App fragt für Updates **nur deinen Server** ab (`https://<deine-domain>/updates`, abgeleitet aus der Server-Adresse) und installiert sie im Hintergrund. Sie spricht nie mit GitHub.
+Die App fragt für Updates **nur deinen Server** ab (`https://<deine-domain>/updates`, abgeleitet aus dem fest eingebauten Server) und installiert sie im Hintergrund. Sie spricht nie mit GitHub.
 
 So kommt eine neue Version zu den Apps:
 

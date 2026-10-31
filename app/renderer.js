@@ -79,6 +79,8 @@
   function renderIdentity() {
     $('myId').textContent = A.formatId(state.myId);
     $('myPw').textContent = !state.password ? '–' : state.passwordCustom ? state.password : `${state.password.slice(0, 5)}-${state.password.slice(5)}`;
+    $('setMyId').textContent = A.formatId(state.myId);
+    $('setMyPw').textContent = $('myPw').textContent;
     $('pwHint').textContent = state.persist ? (state.passwordCustom ? 'Dein eigenes Passwort – bleibt gespeichert.' : 'Bleibt gespeichert, bis du ein neues erzeugst (↻) oder eigenes festlegst (✎).') : 'Wird bei jedem Start neu erzeugt.';
     const name = state.settings.displayName || 'Unbenannt';
     $('userName').textContent = name;
@@ -277,7 +279,7 @@
         state.friends = state.friends.filter((x) => x.id !== f.id);
         saveFriends();
       });
-      const go = () => !locked && connectSaved(f);
+      const go = () => !locked && connectSaved(f, false);
       row.addEventListener('click', go);
       row.addEventListener('keydown', (e) => {
         if (e.key === 'Enter' || e.key === ' ') {
@@ -285,18 +287,32 @@
           go();
         }
       });
-      row.append(av, meta, rm);
+      const ctlBtn = document.createElement('button');
+      ctlBtn.type = 'button';
+      ctlBtn.className = 'friend-ctl';
+      ctlBtn.title = 'Verbinden und gleich fernsteuern';
+      ctlBtn.setAttribute('aria-label', `${f.name || A.formatId(f.id)} fernsteuern`);
+      ctlBtn.innerHTML = '<svg class="icon"><use href="#i-cursor"/></svg>';
+      ctlBtn.addEventListener('click', (e) => {
+        e.stopPropagation();
+        if (!locked) connectSaved(f, true);
+      });
+      const acts = document.createElement('span');
+      acts.className = 'friend-actions';
+      acts.append(ctlBtn, rm);
+      row.append(av, meta, acts);
       list.appendChild(row);
     }
   }
 
-  async function connectSaved(f) {
+  async function connectSaved(f, control = false) {
     if (viewer.peer || viewer.connecting || !state.sig || !state.sig.ready) {
       toast('Du bist noch nicht mit dem Server verbunden.', 'error', 3000);
       return;
     }
     $('connectError').classList.add('hidden');
     viewer.creds = { hostId: f.id, password: f.pw };
+    viewer.wantControl = control;
     viewer.fromSaved = true;
     viewer.leaving = false;
     await openViewerSession(false);
@@ -307,7 +323,13 @@
     $('btnCopyPw').addEventListener('click', () => copyText($('myPw').textContent, 'Passwort'));
     $('btnNewPw').addEventListener('click', () => newPassword('Neues zufälliges Passwort erzeugt. Gespeicherte Passwörter deiner Freunde passen nicht mehr. Bestehende Verbindungen bleiben bestehen.'));
     bindPasswordDialog();
-    $('btnFocusConnect').addEventListener('click', () => $('peerId').focus());
+    $('btnModeWatch').addEventListener('click', () => showConnectPanel('watch'));
+    $('btnModeControl').addEventListener('click', () => showConnectPanel('control'));
+    $('btnConnectBack').addEventListener('click', showModeChooser);
+    $('connectPanel').addEventListener('submit', (e) => {
+      e.preventDefault(); // Enter in a field or the button: connect right away
+      if (!$('btnConnect').disabled) connectToFriend();
+    });
     $('peerId').addEventListener('input', (e) => {
       const digits = e.target.value.replace(/\D/g, '').slice(0, 9);
       e.target.value = digits.replace(/(\d{3})(?=\d)/g, '$1 ');
@@ -315,12 +337,27 @@
     });
     $('peerPw').addEventListener('input', updateConnectButton);
     $('chkRemember').addEventListener('change', () => setPref('rememberPw', $('chkRemember').checked));
-    for (const id of ['peerId', 'peerPw']) {
-      $(id).addEventListener('keydown', (e) => {
-        if (e.key === 'Enter' && !$('btnConnect').disabled) connectToFriend();
-      });
-    }
-    $('btnConnect').addEventListener('click', connectToFriend);
+  }
+
+  /** The start screen offers three ways: share, watch, remote control (watch + ask for control right away). */
+  function showConnectPanel(mode) {
+    state.connectMode = mode === 'control' ? 'control' : 'watch';
+    const control = state.connectMode === 'control';
+    $('connectTitle').textContent = control ? 'Fernsteuern' : 'Zuschauen';
+    $('connectSub').textContent = control
+      ? 'ID und Passwort deines Freundes eingeben. Direkt nach dem Verbinden fragt die App nach Zugriff – dein Freund bestätigt einmal.'
+      : 'ID und Passwort deines Freundes eingeben. Teilt er noch nichts, wartest du im Warteraum, bis der Stream startet.';
+    $('btnConnect').textContent = control ? 'Verbinden und steuern' : 'Verbinden';
+    $('modeChooser').classList.add('hidden');
+    $('connectPanel').classList.remove('hidden');
+    updateConnectButton();
+    $('peerId').focus();
+  }
+
+  function showModeChooser() {
+    $('connectPanel').classList.add('hidden');
+    $('modeChooser').classList.remove('hidden');
+    $('connectError').classList.add('hidden');
   }
 
   /* ================================================================== */
@@ -1187,6 +1224,7 @@
     }
     $('connectError').classList.add('hidden');
     viewer.creds = { hostId, password };
+    viewer.wantControl = state.connectMode === 'control';
     viewer.fromSaved = false;
     viewer.leaving = false;
     await openViewerSession(false);
@@ -1247,6 +1285,7 @@
         $('peerPw').focus();
       }
       $('connectError').classList.remove('hidden');
+      if ($('connectPanel').classList.contains('hidden')) showConnectPanel(viewer.fromSaved ? 'watch' : state.connectMode);
       renderFriends();
       updateConnectButton();
     }
@@ -1255,6 +1294,11 @@
   /** The stream is there (right away, or after a wait in the room). */
   function onViewerLive() {
     viewer.waiting = false;
+    if (viewer.wantControl) {
+      viewer.wantControl = false;
+      viewer.autoEngage = true;
+      if (ctl.state === 'idle') requestControl();
+    }
     $('viewerBusy').classList.add('gone');
     applyViewerQuality();
     startViewerStats();
@@ -1326,6 +1370,8 @@
 
   function leaveViewer() {
     viewer.leaving = true;
+    viewer.wantControl = false;
+    viewer.autoEngage = false;
     resetView();
     clearPictures();
     clearInterval(viewer.statsTimer);
@@ -2277,9 +2323,14 @@
     ctl.clip.start();
     updateViewerTools();
     toast('Der Streamer hat den Zugriff erlaubt.', 'ok');
+    if (viewer.autoEngage) {
+      viewer.autoEngage = false;
+      engage(); // straight into control: this is what "Fernsteuern" on the start screen means
+    }
   }
 
   function endControl(_reason, notify) {
+    viewer.autoEngage = false;
     if (ctl.state === 'idle') return;
     clearTimeout(ctl.timer);
     if (notify && viewer.peer) viewer.peer.sendCtl({ t: 'end' });
@@ -2647,7 +2698,7 @@
   /* ================================================================== */
 
   function settingsForm() {
-    return { displayName: $('setName').value, serverUrl: $('setServer').value, autoUpdate: $('setAutoUpdate').checked };
+    return { displayName: $('setName').value, autoUpdate: $('setAutoUpdate').checked };
   }
 
   /** Version, last check and status in the settings (also re-read while the dialog is open, so "vor 3 Min." stays true). */
@@ -2661,7 +2712,7 @@
   function openSettings() {
     const s = state.settings;
     $('setName').value = s.displayName;
-    $('setServer').value = s.serverUrl;
+    renderIdentity();
     $('setAutoUpdate').checked = s.autoUpdate !== false;
     $('settingsError').classList.add('hidden');
     refreshUpdateInfo();
@@ -2672,11 +2723,9 @@
   async function saveSettings(e) {
     e.preventDefault();
     try {
-      const before = state.settings.serverUrl;
       state.settings = await stf.saveSettings(settingsForm());
       $('settingsDialog').close();
       renderIdentity();
-      if (state.settings.serverUrl !== before) state.sig.restart();
       toast('Einstellungen gespeichert.', 'ok');
     } catch (err) {
       $('settingsError').textContent = errText(err);
@@ -2686,6 +2735,10 @@
 
   function bindSettings() {
     $('btnSettings').addEventListener('click', openSettings);
+    $('btnSetCopyId').addEventListener('click', () => copyText(state.myId, 'ID'));
+    $('btnSetCopyPw').addEventListener('click', () => copyText($('myPw').textContent, 'Passwort'));
+    $('btnSetEditPw').addEventListener('click', openPasswordDialog);
+    $('btnSetNewPw').addEventListener('click', () => newPassword('Neues zufälliges Passwort erzeugt. Gespeicherte Passwörter deiner Freunde passen nicht mehr.'));
     $('btnCloseSettings').addEventListener('click', () => $('settingsDialog').close());
     $('settingsForm').addEventListener('submit', saveSettings);
     $('userAvatar').parentElement.addEventListener('click', openSettings);
@@ -2702,7 +2755,7 @@
     $('setAutoUpdate').addEventListener('change', async () => {
       try {
         const s = state.settings;
-        state.settings = await stf.saveSettings({ displayName: s.displayName, serverUrl: s.serverUrl, autoUpdate: $('setAutoUpdate').checked });
+        state.settings = await stf.saveSettings({ displayName: s.displayName, autoUpdate: $('setAutoUpdate').checked });
         toast($('setAutoUpdate').checked ? 'Automatische Updates sind an.' : 'Automatische Updates sind aus – du kannst jederzeit „Jetzt prüfen“ klicken.', 'ok', 3500);
       } catch (err) {
         $('setAutoUpdate').checked = !$('setAutoUpdate').checked;
@@ -2762,7 +2815,7 @@
     renderHostChip();
     updateViewerTools();
     startSignaling();
-    if (!settings.serverUrl) openSettings();
+    if (!settings.displayName) openSettings(); // first start: pick a name
 
     window.__stfPerf = { uiReadyMs: Math.round(performance.now()), sinceProcessStartMs: info.startedAt ? Date.now() - info.startedAt : null };
 

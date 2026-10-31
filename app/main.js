@@ -17,7 +17,7 @@ const fs = require('fs');
 const crypto = require('crypto');
 const { pathToFileURL } = require('url');
 const { RemoteController } = require('./remote-controller');
-const { normalizeUpdateUrl, updateUrlFromServer, DEFAULT_UPDATE_SOURCE } = require('./update-url');
+const { normalizeUpdateUrl, updateUrlFromServer, resolveServerUrl, DEFAULT_UPDATE_SOURCE } = require('./update-url');
 const { KeyHook } = require('./key-hook');
 const { AppAudio } = require('./app-audio');
 const { DrawOverlay } = require('./draw-overlay');
@@ -62,7 +62,7 @@ function loadSettings() {
   }
   const settings = {
     id: /^\d{9}$/.test(raw.id) ? raw.id : newId(),
-    serverUrl: typeof raw.serverUrl === 'string' ? raw.serverUrl : '',
+    serverUrl: resolveServerUrl(app.isPackaged, process.env.STF_SERVER_URL), // fixed: whatever an older version stored is dropped
     displayName: typeof raw.displayName === 'string' ? raw.displayName : '',
     updateUrl: '', // no longer a setting: updates always come from the GitHub releases (older versions stored one)
     autoUpdate: raw.autoUpdate !== false,
@@ -75,23 +75,6 @@ function loadSettings() {
 function writeSettings(settings) {
   fs.mkdirSync(path.dirname(SETTINGS_FILE()), { recursive: true });
   fs.writeFileSync(SETTINGS_FILE(), JSON.stringify(settings, null, 2), { mode: 0o600 });
-}
-
-function cleanServerUrl(value) {
-  const str = typeof value === 'string' ? value.trim().slice(0, 300) : '';
-  if (!str) return '';
-  let url;
-  try {
-    url = new URL(str);
-  } catch {
-    throw new Error(`Ungültige Server-Adresse: ${str}`);
-  }
-  const loopback = ['localhost', '127.0.0.1', '[::1]'].includes(url.hostname);
-  if (url.protocol !== 'wss:' && !(url.protocol === 'ws:' && loopback)) {
-    throw new Error('Die Server-Adresse muss mit wss:// beginnen (ws:// nur für localhost).');
-  }
-  if (!url.pathname || url.pathname === '/') url.pathname = '/ws';
-  return url.toString();
 }
 
 /** Updates come from the same server as the signaling (STF_UPDATE_URL only exists for local testing). */
@@ -109,7 +92,7 @@ function saveSettings(input) {
   const current = loadSettings();
   const next = {
     ...current,
-    serverUrl: cleanServerUrl(input.serverUrl),
+    serverUrl: resolveServerUrl(app.isPackaged, process.env.STF_SERVER_URL), // not changeable
     // eslint-disable-next-line no-control-regex
     displayName: String(input.displayName || '').replace(/[\u0000-\u001f\u007f]/g, '').trim().slice(0, 32),
     updateUrl: '',

@@ -1,5 +1,12 @@
 # Changelog
 
+## Unreleased
+
+- **Fester Server:** Der Vermittlungs-Server ist in der App fest eingebaut. Er ist nicht mehr änderbar und taucht in den Einstellungen nicht mehr auf.
+- **Einstellungen wie bei Discord/TeamViewer:** Name, ID und Passwort (kopieren, eigenes festlegen, neu erzeugen) unter „Profil“, dazu die Update-Anzeige.
+- **Startbildschirm mit drei Wegen:** Bildschirm teilen, Zuschauen und Fernsteuern. Bei Fernsteuern fragt die App direkt nach dem Verbinden nach Zugriff und übernimmt die Steuerung, sobald der Freund bestätigt. Die Eingabe von ID und Passwort liegt jetzt im Startbildschirm; **Enter** verbindet sofort (vorher musste man zusätzlich unten auf „Verbinden“ klicken).
+- „Zuletzt verbunden“ hat einen Knopf, der verbindet und gleich fernsteuert.
+
 ## 2.0.7
 
 - **Alles läuft über den eigenen Server:** Vermittlung, TURN, TLS **und die App-Updates**. Die App fragt für Updates nur noch `https://<server>/updates` ab (aus der Server-Adresse abgeleitet), nicht mehr GitHub. Der Raspberry Pi wird nicht mehr gebraucht.

@@ -129,9 +129,33 @@ input[type="checkbox"], input[type="radio"] { accent-color: var(--blurple); widt
 .user-meta strong { white-space: nowrap; overflow: hidden; text-overflow: ellipsis; color: var(--text-strong); }
 
 /* ---------- Stage ---------- */
-.welcome { margin: auto; max-width: 560px; text-align: center; padding: 24px; animation: rise 0.28s var(--ease); }
+.welcome { margin: auto; max-width: 880px; width: 100%; text-align: center; padding: 24px; animation: rise 0.28s var(--ease); }
 .welcome p { color: var(--text-muted); font-size: 15px; margin: 0 0 22px; }
 .welcome-icon { width: 96px; height: 96px; border-radius: 50%; background: var(--bg-tertiary); display: grid; place-items: center; margin: 0 auto 18px; color: var(--blurple); }
+.mode-cards { display: grid; grid-template-columns: repeat(auto-fit, minmax(210px, 1fr)); gap: 14px; text-align: left; }
+.mode-card {
+  display: flex; flex-direction: column; gap: 8px; padding: 18px; border: 1px solid transparent; border-radius: 12px; background: var(--bg-tertiary); color: var(--text-normal);
+  font: inherit; cursor: pointer; text-align: left; transition: transform 0.14s var(--ease), border-color 0.14s, background 0.14s;
+}
+.mode-card strong { font-size: 17px; color: var(--text-strong); }
+.mode-card span:last-child { font-size: 13px; color: var(--text-muted); line-height: 1.4; }
+.mode-card:hover { transform: translateY(-2px); border-color: var(--blurple); background: #232428; }
+.mode-card:active { transform: scale(0.98); }
+.mode-icon { width: 54px; height: 54px; border-radius: 50%; background: var(--bg-primary); color: var(--blurple); display: grid; place-items: center; }
+.mode-icon .icon { width: 28px; height: 28px; }
+.connect-panel { display: flex; flex-direction: column; gap: 12px; max-width: 380px; margin: 0 auto; text-align: left; animation: rise 0.2s var(--ease); }
+.connect-panel.hidden, #modeChooser.hidden { display: none; }
+.connect-panel h2 { font-size: 22px; text-transform: none; letter-spacing: 0; color: var(--text-strong); margin: 0; }
+.connect-panel input { font-family: "Cascadia Mono", Consolas, monospace; font-size: 16px; letter-spacing: 0.06em; }
+.profile-row { display: flex; align-items: center; gap: 8px; font-size: 13px; }
+.profile-row .k { width: 64px; color: var(--text-muted); font-weight: 600; flex: none; }
+.profile-row .v { flex: 1; min-width: 0; color: var(--text-strong); user-select: text; overflow-wrap: anywhere; }
+.profile-row .mono { font-family: "Cascadia Mono", Consolas, monospace; font-size: 15px; letter-spacing: 0.05em; }
+.friend-actions { display: flex; align-items: center; gap: 2px; }
+.friend-ctl { opacity: 0; width: 24px; height: 24px; border: 0; border-radius: 6px; background: transparent; color: var(--text-muted); cursor: pointer; display: grid; place-items: center; padding: 0; }
+.friend-ctl .icon { width: 15px; height: 15px; }
+.friend-row:hover .friend-ctl, .friend-row:focus-within .friend-ctl { opacity: 1; }
+.friend-ctl:hover { color: var(--blurple); background: rgba(255, 255, 255, 0.06); }
 .welcome-actions { display: flex; gap: 12px; justify-content: center; flex-wrap: wrap; }
 @keyframes rise { from { opacity: 0; transform: translateY(8px); } }
 

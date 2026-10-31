@@ -21,6 +21,7 @@
     <symbol id="i-fullscreen" viewBox="0 0 24 24"><path d="M7 14H5v5h5v-2H7v-3zm-2-4h2V7h3V5H5v5zm12 7h-3v2h5v-5h-2v3zM14 5v2h3v3h2V5h-5z"/></symbol>
     <symbol id="i-pen" viewBox="0 0 24 24"><path d="M3 17.25V21h3.75L17.81 9.94l-3.75-3.75L3 17.25zM20.71 7.04c.39-.39.39-1.02 0-1.41l-2.34-2.34c-.39-.39-1.02-.39-1.41 0l-1.83 1.83 3.75 3.75 1.83-1.83z"/></symbol>
     <symbol id="i-pin" viewBox="0 0 24 24"><path d="M16 9V4h1c.55 0 1-.45 1-1s-.45-1-1-1H7c-.55 0-1 .45-1 1s.45 1 1 1h1v5c0 1.66-1.34 3-3 3v2h5.97v7l1 1 1-1v-7H19v-2c-1.66 0-3-1.34-3-3z"/></symbol>
+    <symbol id="i-eye" viewBox="0 0 24 24"><path d="M12 4.5C7 4.5 2.73 7.61 1 12c1.73 4.39 6 7.5 11 7.5s9.27-3.11 11-7.5c-1.73-4.39-6-7.5-11-7.5zM12 17c-2.76 0-5-2.24-5-5s2.24-5 5-5 5 2.24 5 5-2.24 5-5 5zm0-8c-1.66 0-3 1.34-3 3s1.34 3 3 3 3-1.34 3-3-1.34-3-3-3z"/></symbol>
     <symbol id="i-image" viewBox="0 0 24 24"><path d="M21 19V5c0-1.1-.9-2-2-2H5c-1.1 0-2 .9-2 2v14c0 1.1.9 2 2 2h14c1.1 0 2-.9 2-2zM8.5 13.5l2.5 3.01L14.5 12l4.5 6H5l3.5-4.5z"/></symbol>
     <symbol id="i-mouse" viewBox="0 0 24 24"><path d="M13 1.07V9h7c0-4.08-3.05-7.44-7-7.93zM4 15c0 4.42 3.58 8 8 8s8-3.58 8-8v-4H4v4zm7-13.93C7.05 1.56 4 4.92 4 9h7V1.07z"/></symbol>
     <symbol id="i-felt" viewBox="0 0 24 24"><path d="M7 14c-1.66 0-3 1.34-3 3 0 1.31-1.16 2-2 2 .92 1.22 2.49 2 4 2 2.21 0 4-1.79 4-4 0-1.66-1.34-3-3-3zm13.71-9.37l-1.34-1.34a.996.996 0 0 0-1.41 0L9 12.25 11.75 15l8.96-8.96a.996.996 0 0 0 0-1.41z"/></symbol>
@@ -74,19 +75,6 @@
         <div id="hostChip" class="status-chip"><span class="chip-dot"></span><span id="hostChipText">Bereit</span></div>
       </section>
 
-      <section class="card connect-card">
-        <h2>Mit Freund verbinden</h2>
-        <label>ID des Freundes
-          <input id="peerId" type="text" inputmode="numeric" placeholder="123 456 789" maxlength="11" spellcheck="false" autocomplete="off" />
-        </label>
-        <label>Passwort
-          <input id="peerPw" type="text" placeholder="Passwort" maxlength="64" spellcheck="false" autocomplete="off" />
-        </label>
-        <label id="rememberRow" class="inline-check" title="Das Passwort wird mit deinem Windows-Konto verschlüsselt gespeichert"><input id="chkRemember" type="checkbox" checked /> Passwort merken</label>
-        <button id="btnConnect" class="btn btn-primary wide" disabled>Verbinden</button>
-        <p id="connectError" class="form-error hidden"></p>
-      </section>
-
       <section id="friendsCard" class="card friends-card hidden">
         <div class="card-head"><h2>Zuletzt verbunden</h2></div>
         <div id="friendsList" class="friends-list"></div>
@@ -108,14 +96,42 @@
     <main class="stage">
       <!-- Idle -->
       <section id="welcome" class="welcome">
-        <div class="welcome-icon"><svg class="icon xl"><use href="#i-monitor"/></svg></div>
-        <h1>Bildschirm und Spielton teilen</h1>
-        <p>Gib deinen Freunden deine <strong>ID</strong> und dein <strong>Passwort</strong> – oder verbinde dich links mit ihrer ID.
-          Der Stream läuft direkt von PC zu PC, an deinem Router muss nichts geöffnet werden.</p>
-        <div class="welcome-actions">
-          <button id="btnShare" class="btn btn-primary big">Bildschirm teilen</button>
-          <button id="btnFocusConnect" class="btn btn-secondary big">Mit Freund verbinden</button>
+        <div id="modeChooser">
+          <h1>Was möchtest du tun?</h1>
+          <p>Alles läuft direkt von PC zu PC – an deinem Router muss nichts geöffnet werden.</p>
+          <div class="mode-cards">
+            <button id="btnShare" class="mode-card" type="button">
+              <span class="mode-icon"><svg class="icon xl"><use href="#i-monitor"/></svg></span>
+              <strong>Bildschirm teilen</strong>
+              <span>Du streamst, deine Freunde sehen zu. Sie brauchen deine ID und dein Passwort (links).</span>
+            </button>
+            <button id="btnModeWatch" class="mode-card" type="button" data-mode="watch">
+              <span class="mode-icon"><svg class="icon xl"><use href="#i-eye"/></svg></span>
+              <strong>Zuschauen</strong>
+              <span>Du verbindest dich mit einem Freund. Steuern kannst du später jederzeit anfragen.</span>
+            </button>
+            <button id="btnModeControl" class="mode-card" type="button" data-mode="control">
+              <span class="mode-icon"><svg class="icon xl"><use href="#i-cursor"/></svg></span>
+              <strong>Fernsteuern</strong>
+              <span>Du verbindest dich und fragst gleich nach Zugriff – dein Freund bestätigt einmal.</span>
+            </button>
+          </div>
         </div>
+
+        <form id="connectPanel" class="connect-panel hidden" autocomplete="off">
+          <h2 id="connectTitle">Zuschauen</h2>
+          <p id="connectSub" class="hint"></p>
+          <label>ID des Freundes
+            <input id="peerId" type="text" inputmode="numeric" placeholder="123 456 789" maxlength="11" spellcheck="false" autocomplete="off" />
+          </label>
+          <label>Passwort
+            <input id="peerPw" type="text" placeholder="Passwort" maxlength="64" spellcheck="false" autocomplete="off" />
+          </label>
+          <label id="rememberRow" class="inline-check" title="Das Passwort wird mit deinem Windows-Konto verschlüsselt gespeichert"><input id="chkRemember" type="checkbox" checked /> Passwort merken</label>
+          <button id="btnConnect" type="submit" class="btn btn-primary wide" disabled>Verbinden</button>
+          <p id="connectError" class="form-error hidden"></p>
+          <button id="btnConnectBack" type="button" class="btn btn-ghost">← Zurück</button>
+        </form>
       </section>
 
       <!-- Host view -->
@@ -312,13 +328,25 @@
   <dialog id="settingsDialog" class="dialog">
     <form method="dialog" id="settingsForm" class="dialog-body" autocomplete="off">
       <h2 class="dialog-title">Einstellungen</h2>
-      <label>Dein Anzeigename
-        <input id="setName" type="text" maxlength="32" placeholder="z. B. Alex" />
-      </label>
-      <label>Vermittlungs-Server (Signaling)
-        <input id="setServer" type="text" placeholder="wss://stf.meinedomain.de/ws" spellcheck="false" />
-        <small class="field-state">Der kleine Server auf deinem VPS. Er vermittelt nur den Verbindungsaufbau – der Stream läuft direkt zwischen den PCs.</small>
-      </label>
+      <fieldset class="update-box profile-box">
+        <legend>Profil</legend>
+        <label>Dein Name
+          <input id="setName" type="text" maxlength="32" placeholder="z. B. Alex" />
+        </label>
+        <div class="profile-row">
+          <span class="k">Deine ID</span>
+          <span id="setMyId" class="v mono"></span>
+          <button type="button" id="btnSetCopyId" class="icon-btn" title="ID kopieren"><svg class="icon"><use href="#i-copy"/></svg></button>
+        </div>
+        <div class="profile-row">
+          <span class="k">Passwort</span>
+          <span id="setMyPw" class="v mono"></span>
+          <button type="button" id="btnSetCopyPw" class="icon-btn" title="Passwort kopieren"><svg class="icon"><use href="#i-copy"/></svg></button>
+          <button type="button" id="btnSetEditPw" class="icon-btn" title="Eigenes Passwort festlegen"><svg class="icon"><use href="#i-pen"/></svg></button>
+          <button type="button" id="btnSetNewPw" class="icon-btn" title="Neues zufälliges Passwort erzeugen"><svg class="icon"><use href="#i-refresh"/></svg></button>
+        </div>
+        <small class="field-state">Diese ID und das Passwort gibst du Freunden, damit sie sich mit dir verbinden können.</small>
+      </fieldset>
       <fieldset class="update-box">
         <legend>Updates</legend>
         <div class="update-grid">
