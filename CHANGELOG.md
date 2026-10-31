@@ -1,6 +1,6 @@
 # Changelog
 
-## Unreleased
+## 2.0.8
 
 - **Fester Server:** Der Vermittlungs-Server ist in der App fest eingebaut. Er ist nicht mehr änderbar und taucht in den Einstellungen nicht mehr auf.
 - **Einstellungen wie bei Discord/TeamViewer:** Name, ID und Passwort (kopieren, eigenes festlegen, neu erzeugen) unter „Profil“, dazu die Update-Anzeige.
